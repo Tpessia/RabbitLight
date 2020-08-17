@@ -1,5 +1,6 @@
 ﻿using RabbitMQ.Client;
 using System;
+using System.Net.Http;
 using System.Threading.Tasks;
 
 namespace RabbitLight.Helpers
@@ -9,7 +10,7 @@ namespace RabbitLight.Helpers
         int TotalChannels { get; }
         Task<int?> GetMessageCount(string queue);
         Task<IConnection> GetOrCreateConnection();
-        Task<IModel> CreateSingleChannel();
+        Task<IModel> CreateUnmanagedChannel();
         Task<IModel> GetOrCreateChannel();
         Task<IModel> CreateConsumerChannel();
         void DeleteChannels(int count);

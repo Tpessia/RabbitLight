@@ -18,7 +18,7 @@ namespace RabbitLight.Consumer.Manager
     {
         // Connection
         private readonly ConnectionConfig _connConfig;
-        private readonly IConnectionPool _connManager;
+        private readonly IConnectionPool _connPool;
 
         // Consumers
         private readonly IServiceProvider _sp;
@@ -51,7 +51,7 @@ namespace RabbitLight.Consumer.Manager
             _sp = sp;
 
             _connConfig = connConfig;
-            _connManager = connManager;
+            _connPool = connManager;
 
             consumerTypes ??= Assembly.GetEntryAssembly().GetTypes();
             _consumerTypes = consumerTypes.Where(x => typeof(ConsumerBase).IsAssignableFrom(x)
@@ -84,7 +84,7 @@ namespace RabbitLight.Consumer.Manager
         public void Dispose()
         {
             _cts.Cancel();
-            _connManager.Dispose();
+            _connPool.Dispose();
         }
 
         #endregion
@@ -111,7 +111,7 @@ namespace RabbitLight.Consumer.Manager
                     var (queues, consumerParamType) = queuesMetadata.Value;
 
                     // Declare Queues
-                    using var channel = await _connManager.CreateSingleChannel();
+                    using var channel = await _connPool.CreateUnmanagedChannel();
                     foreach (var exchange in exchanges)
                     {
                         foreach (var queue in queues)
@@ -136,10 +136,10 @@ namespace RabbitLight.Consumer.Manager
         {
             for (int i = 0; i < channelCount; i++)
             {
-                var overMax = _connManager.TotalChannels >= _connConfig.MaxChannels;
+                var overMax = _connPool.TotalChannels >= _connConfig.MaxChannels;
                 if (overMax) break;
 
-                var channel = await _connManager.CreateConsumerChannel();
+                var channel = await _connPool.CreateConsumerChannel();
                 foreach (var consumer in _consumers)
                     RegisterListener(consumer, channel);
             }
@@ -180,10 +180,10 @@ namespace RabbitLight.Consumer.Manager
                     {
                         // Error: Requeue
                         consumer.Logger?.LogError(ex, "[RabbitLight] Error while consuming, requeueing message");
-                        if (_connConfig.RequeueInterval.HasValue)
+                        if (_connConfig.RequeueDelay.HasValue)
                         {
-                            var delay = (int)_connConfig.RequeueInterval.Value.TotalMilliseconds;
-                            _ = Task.Delay((int)_connConfig.RequeueInterval.Value.TotalMilliseconds, _cts.Token)
+                            var delay = (int)_connConfig.RequeueDelay.Value.TotalMilliseconds;
+                            _ = Task.Delay(delay, _cts.Token)
                                 .ContinueWith(t => Nack(channel, ea.DeliveryTag, requeue: true), _cts.Token);
                         }
                         else
@@ -222,7 +222,7 @@ namespace RabbitLight.Consumer.Manager
 
                 if (_connConfig.ScallingThreshold.HasValue)
                 {
-                    var tasks = _consumers.Select(x => _connManager.GetMessageCount(x.Queue.Name));
+                    var tasks = _consumers.Select(x => _connPool.GetMessageCount(x.Queue.Name));
                     var requests = await Task.WhenAll(tasks);
                     var messageCount = requests.Sum();
 
@@ -230,16 +230,16 @@ namespace RabbitLight.Consumer.Manager
                 }
 
                 expected = expected > _connConfig.MaxChannels ? _connConfig.MaxChannels : expected;
-                var diff = expected - _connManager.TotalChannels;
+                var diff = expected - _connPool.TotalChannels;
 
                 if (diff != 0)
-                    _logger?.LogWarning($"[RabbitLight] Scalling ({_connManager.TotalChannels} -> {expected})");
+                    _logger?.LogWarning($"[RabbitLight] Scalling ({_connPool.TotalChannels} -> {expected})");
 
                 if (diff > 0)
                     await RegisterListeners(diff);
                 else if (diff < 0)
-                    _connManager.DeleteChannels(-diff);
-            }, TimeSpan.FromSeconds(60), _cts.Token,
+                    _connPool.DeleteChannels(-diff);
+            }, _connConfig.MonitoringInterval, _cts.Token,
             ex => Task.Run(() => _logger?.LogError(ex, "[RabbitLight] Error while scalling")));
         }
 

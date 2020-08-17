@@ -39,7 +39,11 @@ namespace RabbitLight.Config
         /// <summary>
         /// Delay for when Nacking a message for requeue
         /// </summary>
-        public TimeSpan? RequeueInterval { get; set; }
+        public TimeSpan? RequeueDelay { get; set; }
+        /// <summary>
+        /// Interval regarding channel monitoring tasks (health check and scalling)
+        /// </summary>
+        public TimeSpan MonitoringInterval { get; set; }
 
         private ConnectionConfig()
         {
@@ -74,7 +78,8 @@ namespace RabbitLight.Config
             config.ScallingThreshold = config.ScallingThreshold;
             config.PrefetchCount = config.PrefetchCount == default ? (ushort)10 : config.PrefetchCount;
             config.ChannelsPerConnection = config.ChannelsPerConnection == default ? (ushort)20 : config.ChannelsPerConnection;
-            config.RequeueInterval = config.RequeueInterval;
+            config.RequeueDelay = config.RequeueDelay;
+            config.MonitoringInterval = config.MonitoringInterval == default ? TimeSpan.FromSeconds(60) : config.MonitoringInterval;
 
             return config;
         }

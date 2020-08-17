@@ -107,7 +107,9 @@ public class ExampleConsumer : ConsumerBase
 
         // You may discard a message with DiscardMessageException
         // Any other exception will result in requeue
-        throw new DiscardMessageException("Example");
+        var msg = context.MessageFromJson();
+        if (msg == null)
+            throw new DiscardMessageException("Invalid message");
     }
 }
 
@@ -178,7 +180,8 @@ public class ExampleController : ControllerBase
     "ScallingThreshold": 500,
     "PrefetchCount": 10,
     "ChannelsPerConnection": 20,
-    "RequeueInterval": "00:00:05"
+    "RequeueDelay": "00:00:05",
+    "MonitoringInterval": "00:01:00"
   }
 }
 ```
@@ -198,4 +201,5 @@ public class ExampleController : ControllerBase
 | **ScallingThreshold** | Number of messages required to scale a new channel (e.g. 500 messages) or null to disable. |
 | **PrefetchCount** | Number of messages that will be cached by each channel at once. |
 | **ChannelsPerConnection** | Number of channels per connection (RabbitMQ's IConnection). |
-| **RequeueInterval** | Delay for when Nacking a message for requeue or null to 0. |
+| **RequeueDelay** | Delay for when Nacking a message for requeue or null to 0. |
+| **MonitoringInterval** | Interval regarding channel monitoring tasks (health check and scalling) |

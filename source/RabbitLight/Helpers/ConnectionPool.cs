@@ -36,7 +36,7 @@ namespace RabbitLight.Helpers
             _connConfig.RequestedChannelMax = _connConfig.ChannelsPerConnection;
 
             Monitoring.Run(() => Task.Run(() => DisposeClosedChannels()),
-                TimeSpan.FromSeconds(60), _cts.Token,
+                _connConfig.MonitoringInterval, _cts.Token,
                 ex => Task.Run(() => logger?.LogError(ex, "[RabbitLight] Error while disposing connections/channels")));
         }
 
@@ -54,13 +54,13 @@ namespace RabbitLight.Helpers
                 // Prevent returning a closed connection
                 if (!IsNull(poolItem) && !poolItem.Key.IsOpen)
                 {
-                    poolItem = default;
                     RemoveConnection(poolItem.Key);
+                    poolItem = default;
                 }
 
                 if (IsNull(poolItem))
                 {
-                    conn = await CreateSingleConnection();
+                    conn = await CreateUnmanagedConnection();
                     _connPool[conn] = new List<IModel>();
                 }
                 else
@@ -76,9 +76,9 @@ namespace RabbitLight.Helpers
             }
         }
 
-        public async Task<IModel> CreateSingleChannel()
+        public async Task<IModel> CreateUnmanagedChannel()
         {
-            var conn = await CreateSingleConnection();
+            var conn = await CreateUnmanagedConnection();
             var channel = conn.CreateModel();
             return channel;
         }
@@ -90,8 +90,16 @@ namespace RabbitLight.Helpers
             try
             {
                 var conn = await GetOrCreateConnection();
-                var poolItem = _connPool[conn];
-                var channel = poolItem.FirstOrDefault() ?? await CreateChannel();
+                var cachedChannel = _connPool[conn].FirstOrDefault();
+
+                // Prevent returning a closed channel
+                if (cachedChannel != null && !cachedChannel.IsOpen)
+                {
+                    RemoveChannel(cachedChannel, conn);
+                    cachedChannel = default;
+                }
+
+                var channel = cachedChannel != null ? cachedChannel : await CreateChannel();
                 return channel;
             }
             finally
@@ -135,7 +143,7 @@ namespace RabbitLight.Helpers
                         if (smallestPool.Value.Count() > 0)
                         {
                             var channel = smallestPool.Value[0];
-                            RemoveChannel(channel, smallestPool.Value);
+                            RemoveChannel(channel, smallestPool.Key);
                         }
                         else
                         {
@@ -150,9 +158,9 @@ namespace RabbitLight.Helpers
                 _channelLock.Release();
             }
 
-            foreach (var pool in emptyPools)
+            for (int i = 0; i < emptyPools.Count(); i++)
             {
-                RemoveConnection(pool);
+                RemoveConnection(emptyPools[0]);
                 DeleteChannels(1);
             }
         }
@@ -171,7 +179,7 @@ namespace RabbitLight.Helpers
                     {
                         if (channel == ch)
                         {
-                            RemoveChannel(channel, poolItem.Value);
+                            RemoveChannel(channel, poolItem.Key);
                             found = true;
                         }
 
@@ -205,16 +213,24 @@ namespace RabbitLight.Helpers
 
             try
             {
+                var deletes = new List<Action>();
+
                 foreach (var poolItem in _connPool)
                 {
                     foreach (var ch in poolItem.Value)
+                    {
                         if (!ch.IsOpen)
-                            RemoveChannel(ch, poolItem.Value);
+                            deletes.Add(() => RemoveChannel(ch, poolItem.Key));
+                    }
 
                     var conn = poolItem.Key;
                     if (!conn.IsOpen)
-                        RemoveConnection(conn);
+                        deletes.Add(() => RemoveConnection(conn));
                 }
+
+                for (int i = 0; i < deletes.Count(); i++)
+                    deletes[i].Invoke();
+
             }
             finally
             {
@@ -245,7 +261,7 @@ namespace RabbitLight.Helpers
 
         #region Private
 
-        private async Task<IConnection> CreateSingleConnection()
+        private async Task<IConnection> CreateUnmanagedConnection()
         {
             await CreateVHostAndConfigs();
             return _connConfig.CreateConnection();
@@ -294,10 +310,10 @@ namespace RabbitLight.Helpers
             return channel;
         }
 
-        private void RemoveChannel(IModel channel, List<IModel> poolItem)
+        private void RemoveChannel(IModel channel, IConnection conn)
         {
             if (channel.IsOpen) channel.Close();
-            poolItem.Remove(channel);
+            _connPool[conn].Remove(channel);
             channel.Dispose();
         }
 
