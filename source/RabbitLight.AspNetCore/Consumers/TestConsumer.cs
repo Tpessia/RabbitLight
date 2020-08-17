@@ -1,8 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using RabbitLight.AspNetCore.Models;
-using RabbitLight.Attributes;
-using RabbitLight.Interfaces;
-using RabbitLight.Models;
+using RabbitLight.Consumer;
+using RabbitLight.Exceptions;
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
@@ -11,7 +10,7 @@ namespace RabbitLight.AspNetCore.Consumers
 {
     [Exchange("test-exchange1")]
     [Exchange("test-exchange2")]
-    public class TestConsumer : IConsumer
+    public class TestConsumer : ConsumerBase
     {
         private readonly ILogger<TestConsumer> _logger;
 
@@ -25,7 +24,7 @@ namespace RabbitLight.AspNetCore.Consumers
 
         [Queue("test-queue1", "test1")]
         [Queue("test-queue2", "test2")]
-        public async Task Test(BusContext<Test> context)
+        public async Task Test(MessageContext<Test> context)
         {
             Stopwatch stopWatch = new Stopwatch();
             stopWatch.Start();
@@ -40,9 +39,9 @@ namespace RabbitLight.AspNetCore.Consumers
             stopWatch.Stop();
             var duration = DateTime.Now - Start;
             _logger.LogInformation("\r\n----------"
-                + "CONSUMING"
-                + "----------"
-                + $"{context.EventArgs.Exchange}:{context.EventArgs.RoutingKey} -> {msg.Text}"
+                + "\r\nCONSUMING"
+                + "\r\n----------"
+                + $"\r\n{context.EventArgs.Exchange}:{context.EventArgs.RoutingKey} -> {msg.Text}"
                 + $"\r\nElapsed: {stopWatch.Elapsed}"
                 + $"\r\nCount: {Count}"
                 + $"\r\nDuration: {duration}"
@@ -50,8 +49,14 @@ namespace RabbitLight.AspNetCore.Consumers
                 + $"\r\nMsg/s: {TimeSpan.FromSeconds(1) / (duration / Count)}\r\n");
         }
 
+        [Queue("test-queue3", "test3")]
+        public void TestDiscard(MessageContext<Test> context)
+        {
+            throw new DiscardMessageException("Test");
+        }
+
         [Queue("reset", "reset")]
-        public void Reset(BusContext<Test> context)
+        public void Reset(MessageContext<Test> context)
         {
             _logger.LogInformation("Reseting Consumer...");
             Count = 0;

@@ -1,11 +1,11 @@
-﻿using RabbitLight.Attributes;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using RabbitLight.Exceptions;
 using System;
 using System.Reflection;
 using System.Threading.Tasks;
 
-namespace RabbitLight.Models
+namespace RabbitLight.Consumer.Manager
 {
     public class ConsumerMetadata
     {
@@ -17,7 +17,7 @@ namespace RabbitLight.Models
         public QueueAttribute Queue { get; set; }
         public ILogger Logger { get; set; }
 
-        public async Task Invoke(IServiceProvider serviceProvider, params object[] contextParams)
+        internal async Task Invoke(IServiceProvider serviceProvider, params object[] contextParams)
         {
             // Create Consumer Instance
             var consumer = ActivatorUtilities.CreateInstance(serviceProvider, Type);
@@ -28,8 +28,15 @@ namespace RabbitLight.Models
             // Run Consumer Method
             var isAwaitable = MethodInfo.ReturnType.GetMethod(nameof(Task.GetAwaiter)) != null;
 
-            if (isAwaitable) await (dynamic)MethodInfo.Invoke(consumer, consumerParams);
-            else MethodInfo.Invoke(consumer, consumerParams);
+            try
+            {
+                if (isAwaitable) await (dynamic)MethodInfo.Invoke(consumer, consumerParams);
+                else MethodInfo.Invoke(consumer, consumerParams);
+            }
+            catch (Exception ex)
+            {
+                throw ex.InnerException;
+            }
         }
     }
 }

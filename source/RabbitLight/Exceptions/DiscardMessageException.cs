@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.Serialization;
 
-namespace RabbitLight.Models
+namespace RabbitLight.Exceptions
 {
     public class DiscardMessageException : Exception
     {
