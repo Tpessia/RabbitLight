@@ -14,12 +14,12 @@ namespace RabbitLight.Config
         /// Minimum number of parallel channels
         /// <br>https://www.rabbitmq.com/consumers.html#concurrency</br>
         /// </summary>
-        public ushort MinChannels { get; set; }
+        public ushort MinChannels { get; set; } = 10;
         /// <summary>
         /// Maximum number of parallel channels
         /// <br>https://www.rabbitmq.com/consumers.html#concurrency</br>
         /// </summary>
-        public ushort MaxChannels { get; set; }
+        public ushort MaxChannels { get; set; } = 50;
         /// <summary>
         /// Number of messages required to scale a new channel (e.g. 1000 messages)
         /// </summary>
@@ -30,12 +30,12 @@ namespace RabbitLight.Config
         /// <br>it should be a number smaller enough to prevent blocking other queues for a long time,</br>
         /// <br>and big enough to prevent multipe fetchs to the server (e.g. 10).</br>
         /// </summary>
-        public ushort PrefetchCount { get; set; }
+        public ushort PrefetchCount { get; set; } = 10;
         /// <summary>
         /// Number of channels per connection (RabbitMQ's IConnection).
         /// <br>Should be equal to or smaller than the one configured on the server.</br>
         /// </summary>
-        public ushort ChannelsPerConnection { get; set; }
+        public ushort ChannelsPerConnection { get; set; } = 25;
         /// <summary>
         /// Delay for when Nacking a message for requeue
         /// </summary>
@@ -43,10 +43,26 @@ namespace RabbitLight.Config
         /// <summary>
         /// Interval regarding channel monitoring tasks (health check and scalling)
         /// </summary>
-        public TimeSpan MonitoringInterval { get; set; }
+        public TimeSpan MonitoringInterval { get; set; } = TimeSpan.FromSeconds(60);
 
         private ConnectionConfig()
         {
+        }
+
+        public ConnectionConfig(ushort portApi, ushort? minChannels = null, ushort? maxChannels = null,
+            ushort? scallingThreshold = null, ushort? prefetchCount = null, ushort? channelsPerConnection = null,
+            TimeSpan? requeueDelay = null, TimeSpan? monitoringInterval = null)
+        {
+            PortApi = portApi;
+            MinChannels = minChannels ?? MinChannels;
+            MaxChannels = maxChannels ?? MaxChannels;
+            ScallingThreshold = scallingThreshold;
+            PrefetchCount = prefetchCount ?? PrefetchCount;
+            ChannelsPerConnection = channelsPerConnection ?? ChannelsPerConnection;
+            RequeueDelay = requeueDelay;
+            MonitoringInterval = monitoringInterval ?? MonitoringInterval;
+
+            Validate(this);
         }
 
         public static ConnectionConfig FromConfig(IConfiguration configuration)
@@ -54,6 +70,13 @@ namespace RabbitLight.Config
             var config = new ConnectionConfig();
             configuration.Bind(config);
 
+            Validate(config);
+
+            return config;
+        }
+
+        private static void Validate(ConnectionConfig config)
+        {
             if (config.MinChannels < 1)
                 throw new ArgumentException("Should be bigger than 0", nameof(config.MinChannels));
 
@@ -71,17 +94,6 @@ namespace RabbitLight.Config
 
             if (config.ChannelsPerConnection < 1)
                 throw new ArgumentException("Should be bigger than 0", nameof(config.ChannelsPerConnection));
-
-            config.PortApi = config.PortApi;
-            config.MinChannels = config.MinChannels == default ? (ushort)10 : config.MinChannels;
-            config.MaxChannels = config.MaxChannels == default ? (ushort)50 : config.MaxChannels;
-            config.ScallingThreshold = config.ScallingThreshold;
-            config.PrefetchCount = config.PrefetchCount == default ? (ushort)10 : config.PrefetchCount;
-            config.ChannelsPerConnection = config.ChannelsPerConnection == default ? (ushort)20 : config.ChannelsPerConnection;
-            config.RequeueDelay = config.RequeueDelay;
-            config.MonitoringInterval = config.MonitoringInterval == default ? TimeSpan.FromSeconds(60) : config.MonitoringInterval;
-
-            return config;
         }
     }
 }
