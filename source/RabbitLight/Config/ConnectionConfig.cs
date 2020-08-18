@@ -49,10 +49,16 @@ namespace RabbitLight.Config
         {
         }
 
-        public ConnectionConfig(ushort portApi, ushort? minChannels = null, ushort? maxChannels = null,
+        public ConnectionConfig(string userName, string password, string vhost, string hostname, ushort port, ushort portApi, ushort? minChannels = null, ushort? maxChannels = null,
             ushort? scallingThreshold = null, ushort? prefetchCount = null, ushort? channelsPerConnection = null,
             TimeSpan? requeueDelay = null, TimeSpan? monitoringInterval = null)
         {
+            UserName = userName;
+            Password = password;
+            VirtualHost = vhost;
+            HostName = hostname;
+            Port = port;
+
             PortApi = portApi;
             MinChannels = minChannels ?? MinChannels;
             MaxChannels = maxChannels ?? MaxChannels;

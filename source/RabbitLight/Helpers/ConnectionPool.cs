@@ -44,7 +44,7 @@ namespace RabbitLight.Helpers
 
         public async Task<IConnection> GetOrCreateConnection()
         {
-            await _connLock.WaitAsync();
+            await _connLock.WaitAsync(TimeSpan.FromSeconds(10), _cts.Token);
 
             try
             {
@@ -85,7 +85,7 @@ namespace RabbitLight.Helpers
 
         public async Task<IModel> GetOrCreateChannel()
         {
-            await _channelLock.WaitAsync();
+            await _channelLock.WaitAsync(TimeSpan.FromSeconds(10), _cts.Token);
 
             try
             {
@@ -110,7 +110,7 @@ namespace RabbitLight.Helpers
 
         public async Task<IModel> CreateConsumerChannel()
         {
-            await _channelLock.WaitAsync();
+            await _channelLock.WaitAsync(TimeSpan.FromSeconds(10), _cts.Token);
 
             try
             {
@@ -126,8 +126,8 @@ namespace RabbitLight.Helpers
 
         public void DeleteChannels(int count)
         {
-            _connLock.Wait();
-            _channelLock.Wait();
+            _connLock.Wait(TimeSpan.FromSeconds(10), _cts.Token);
+            _channelLock.Wait(TimeSpan.FromSeconds(10), _cts.Token);
 
             var emptyPools = new List<IConnection>();
 
@@ -167,8 +167,8 @@ namespace RabbitLight.Helpers
 
         public void DeleteChannel(IModel channel)
         {
-            _connLock.Wait();
-            _channelLock.Wait();
+            _connLock.Wait(TimeSpan.FromSeconds(10), _cts.Token);
+            _channelLock.Wait(TimeSpan.FromSeconds(10), _cts.Token);
 
             try
             {
@@ -208,8 +208,8 @@ namespace RabbitLight.Helpers
 
         public void DisposeClosedChannels()
         {
-            _connLock.Wait();
-            _channelLock.Wait();
+            _connLock.Wait(TimeSpan.FromSeconds(10), _cts.Token);
+            _channelLock.Wait(TimeSpan.FromSeconds(10), _cts.Token);
 
             try
             {
