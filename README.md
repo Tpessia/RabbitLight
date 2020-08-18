@@ -203,3 +203,53 @@ public class ExampleController : ControllerBase
 | **ChannelsPerConnection** | Number of channels per connection (RabbitMQ's IConnection). |
 | **RequeueDelay** | Delay for when Nacking a message for requeue or null to 0. |
 | **MonitoringInterval** | Interval regarding channel monitoring tasks (health check and scalling) |
+
+### Bonus: Console App
+
+Using RabbittLight with a simple Console App
+
+```csharp
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using RabbitLight.Config;
+using RabbitLight.ConsoleApp.Consumers.Context;
+using System;
+using System.IO;
+using System.Reflection;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        // Build appsettings.json Configurations
+        var env = Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "Development";
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetParent(AppContext.BaseDirectory).FullName)
+            .AddJsonFile("appsettings.json", false, false)
+            .AddJsonFile($"appsettings.{env}.json", false, false)
+            .Build();
+
+        // Build Service Provider
+        var serviceProvider = new ServiceCollection()
+            .AddLogging(c => c.AddConsole())
+            .BuildServiceProvider();
+
+        // Create Context
+        var context = new TestContext(serviceProvider, new ContextConfig
+        {
+            ConnConfig = ConnectionConfig.FromConfig(configuration.GetSection("RabbitLight")),
+            Consumers = Assembly.GetEntryAssembly().GetTypes()
+        });
+
+        // Register ContextConsumers
+        context.Register();
+
+        // Prevent App From Closing
+        Console.ReadLine();
+
+        // Dispose Dependencies
+        serviceProvider.Dispose();
+    }
+}
+```

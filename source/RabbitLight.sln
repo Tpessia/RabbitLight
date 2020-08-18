@@ -7,6 +7,12 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RabbitLight", "RabbitLight\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RabbitLight.AspNetCore", "RabbitLight.AspNetCore\RabbitLight.AspNetCore.csproj", "{F53D79BD-E2DE-4CD9-B2D9-177C7A12462E}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "1 - RabbitLight", "1 - RabbitLight", "{9DB35583-9900-4665-BC06-85DBF7CEB1B5}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "2 - Applications", "2 - Applications", "{0841FAD4-6B81-4699-81D5-0B239EFA81E2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RabbitLight.ConsoleApp", "RabbitLight.ConsoleApp\RabbitLight.ConsoleApp.csproj", "{04160E92-AA1A-4A92-88CE-47B0FE541DFE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,9 +27,18 @@ Global
 		{F53D79BD-E2DE-4CD9-B2D9-177C7A12462E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F53D79BD-E2DE-4CD9-B2D9-177C7A12462E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F53D79BD-E2DE-4CD9-B2D9-177C7A12462E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{04160E92-AA1A-4A92-88CE-47B0FE541DFE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{04160E92-AA1A-4A92-88CE-47B0FE541DFE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{04160E92-AA1A-4A92-88CE-47B0FE541DFE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{04160E92-AA1A-4A92-88CE-47B0FE541DFE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{3255EA3D-D8D5-464F-A0A4-6F8AAEBCD2D4} = {9DB35583-9900-4665-BC06-85DBF7CEB1B5}
+		{F53D79BD-E2DE-4CD9-B2D9-177C7A12462E} = {0841FAD4-6B81-4699-81D5-0B239EFA81E2}
+		{04160E92-AA1A-4A92-88CE-47B0FE541DFE} = {0841FAD4-6B81-4699-81D5-0B239EFA81E2}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {71EC3181-E90B-4AB4-AB2A-3A49791162CE}
