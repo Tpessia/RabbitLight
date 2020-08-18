@@ -1,5 +1,21 @@
 # RabbitLight
 
+## What
+
+RabbitLight is a RabbitMQ Client for .NET developed with simplicity in mind.
+
+Messages are routed to their respective consumers using Data Annotations, similar to the `[Route("my-route")]` attribute used on AspNetCore projects.
+
+To create a consumer, you just have to:
+
+**1.** Create a class that inherits from `ConsumerBase`
+
+**2.** Use `[Exchange("my-exchange")]` to bind a exchange to that class
+
+**3.** Add `[Queue("my-queue")]` to bind a queue to a method from that class
+
+## How
+
 **1.** Create a Context
 
 Think of a context as a unique instance of a client, that listens and/or publishes to a specific RabbitMQ server.
