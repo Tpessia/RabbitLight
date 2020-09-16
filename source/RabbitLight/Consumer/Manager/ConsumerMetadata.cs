@@ -28,15 +28,8 @@ namespace RabbitLight.Consumer.Manager
             // Run Consumer Method
             var isAwaitable = MethodInfo.ReturnType.GetMethod(nameof(Task.GetAwaiter)) != null;
 
-            try
-            {
-                if (isAwaitable) await (dynamic)MethodInfo.Invoke(consumer, consumerParams);
-                else MethodInfo.Invoke(consumer, consumerParams);
-            }
-            catch (Exception ex)
-            {
-                throw ex.InnerException;
-            }
+            if (isAwaitable) await (dynamic)MethodInfo.Invoke(consumer, consumerParams);
+            else MethodInfo.Invoke(consumer, consumerParams);
         }
     }
 }
