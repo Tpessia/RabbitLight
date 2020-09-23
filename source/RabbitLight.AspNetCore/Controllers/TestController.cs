@@ -4,11 +4,7 @@ using RabbitLight.AspNetCore.Consumers.Context;
 using RabbitLight.AspNetCore.Models;
 using RabbitLight.Publisher;
 using System;
-using System.Collections;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace RabbitLight.AspNetCore.Controllers
@@ -30,7 +26,7 @@ namespace RabbitLight.AspNetCore.Controllers
             _publisher = busContext.Publisher;
         }
 
-        [HttpGet]
+        [HttpGet("send")]
         public async Task<string> SendMessage()
         {
             var body = new Test { Text = "Hello, World!" };
@@ -43,7 +39,15 @@ namespace RabbitLight.AspNetCore.Controllers
         public async Task<string> SendDiscard()
         {
             var body = new Test { Text = "Hello, World!" };
-            await _publisher.PublishJson("test-exchange1", "test3", body);
+            await _publisher.PublishJson("test-exchange1", "discard", body);
+            return "Message published!";
+        }
+
+        [HttpGet("error")]
+        public async Task<string> SendError()
+        {
+            var body = new Test { Text = "Hello, World!" };
+            await _publisher.PublishJson("test-exchange1", "error", body);
             return "Message published!";
         }
 
@@ -63,17 +67,7 @@ namespace RabbitLight.AspNetCore.Controllers
         public async Task<string> Infinite()
         {
             var body = new Test { Text = "Hello, World!" };
-
-            while (true)
-                await Publish(body);
-        }
-
-        [HttpGet("infinite2")]
-        public void Infinite2()
-        {
-            var body = new Test { Text = "Hello, World!" };
-
-            While(new ParallelOptions { MaxDegreeOfParallelism = 10 }, () => true, x => Publish(body).Wait());
+            while (true) await Publish(body);
         }
 
         private async Task Publish(Test body)
@@ -97,52 +91,6 @@ namespace RabbitLight.AspNetCore.Controllers
                 + $"\r\nDuration: {duration}"
                 + $"\r\nAvg: {duration / Count}"
                 + $"\r\nMsg/s: {TimeSpan.FromSeconds(1) / (duration / Count)}\r\n");
-        }
-
-        public static void While(ParallelOptions parallelOptions, Func<bool> condition, Action<ParallelLoopState> body)
-        {
-            Parallel.ForEach(new InfinitePartitioner(), parallelOptions,
-                (ignored, loopState) =>
-                {
-                    if (condition()) body(loopState);
-                    else loopState.Stop();
-                });
-        }
-    }
-
-    public class InfinitePartitioner : Partitioner<bool>
-    {
-        public override IList<IEnumerator<bool>> GetPartitions(int partitionCount)
-        {
-            if (partitionCount < 1)
-                throw new ArgumentOutOfRangeException("partitionCount");
-            return (from i in Enumerable.Range(0, partitionCount)
-                    select InfiniteEnumerator()).ToArray();
-        }
-
-        public override bool SupportsDynamicPartitions { get { return true; } }
-
-        public override IEnumerable<bool> GetDynamicPartitions()
-        {
-            return new InfiniteEnumerators();
-        }
-
-        private static IEnumerator<bool> InfiniteEnumerator()
-        {
-            while (true) yield return true;
-        }
-
-        private class InfiniteEnumerators : IEnumerable<bool>
-        {
-            public IEnumerator<bool> GetEnumerator()
-            {
-                return InfiniteEnumerator();
-            }
-
-            IEnumerator IEnumerable.GetEnumerator()
-            {
-                return GetEnumerator();
-            }
         }
     }
 }

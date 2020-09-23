@@ -52,11 +52,26 @@ public void ConfigureServices(IServiceCollection services)
 
         // Optional callback called before a consumer is invoked
         config.OnStart = (sp, type, ea) => Task.Run(() =>
-            sp.GetService<ILoggerFactory>()?.CreateLogger(type).LogInformation($"\r\nSTARTING {type.Name}: {ea.DeliveryTag}\r\n"));
+        {
+            var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
+            logger?.LogInformation($"\r\nSTARTING {type.Name}: {ea.DeliveryTag}\r\n");
+        });
 
         // Optional callback called after a consumer is successfully invoked
         config.OnEnd = (sp, type, ea) => Task.Run(() =>
-            sp.GetService<ILoggerFactory>()?.CreateLogger(type).LogInformation($"\r\nENDING {type.Name}: {ea.DeliveryTag}\r\n"));
+        {
+            var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
+            logger?.LogInformation($"\r\nENDING {type.Name}: {ea.DeliveryTag}\r\n");
+        });
+
+        // Optional global error handler, whose return identifies the requeue strategy
+        config.OnError = (sp, ex, type, ea) => Task.Run(() =>
+        {
+            var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
+            logger?.LogError($"Handled error in {type.Name}: {ea.DeliveryTag}");
+            var requeue = !(ex is SerializationException);
+            return requeue;
+        });
     });
 
     // ...

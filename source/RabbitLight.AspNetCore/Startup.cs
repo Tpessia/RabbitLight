@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RabbitLight.AspNetCore.Consumers.Context;
 using RabbitLight.Config;
+using RabbitLight.Exceptions;
 using RabbitLight.Extentions;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -29,9 +30,28 @@ namespace RabbitLight.AspNetCore
             services.AddRabbitLightContext<TestContext>(config =>
             {
                 config.ConnConfig = ConnectionConfig.FromConfig(Configuration.GetSection("RabbitLight"));
+
                 config.Consumers = Assembly.GetEntryAssembly().GetTypes();
-                config.OnStart = (sp, type, ea) => Task.Run(() => sp.GetService<ILoggerFactory>()?.CreateLogger(type).LogInformation($"\r\nSTARTING {type.Name}: {ea.DeliveryTag}\r\n"));
-                config.OnEnd = (sp, type, ea) => Task.Run(() => sp.GetService<ILoggerFactory>()?.CreateLogger(type).LogInformation($"\r\nENDING {type.Name}: {ea.DeliveryTag}\r\n"));
+
+                config.OnStart = (sp, type, ea) => Task.Run(() =>
+                {
+                    var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
+                    logger?.LogInformation($"\r\nSTARTING {type.Name}: {ea.DeliveryTag}\r\n");
+                });
+
+                config.OnEnd = (sp, type, ea) => Task.Run(() =>
+                {
+                    var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
+                    logger?.LogInformation($"\r\nENDING {type.Name}: {ea.DeliveryTag}\r\n");
+                });
+
+                config.OnError = (sp, ex, type, ea) => Task.Run(() =>
+                {
+                    var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
+                    logger?.LogError($"Handled error in {type.Name}: {ea.DeliveryTag}");
+                    var requeue = !(ex is SerializationException);
+                    return requeue;
+                });
             });
         }
 

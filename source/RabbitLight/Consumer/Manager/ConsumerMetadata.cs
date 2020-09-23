@@ -17,7 +17,7 @@ namespace RabbitLight.Consumer.Manager
         public QueueAttribute Queue { get; set; }
         public ILogger Logger { get; set; }
 
-        internal async Task Invoke(IServiceProvider serviceProvider, params object[] contextParams)
+        internal async Task InvokeConsumer(IServiceProvider serviceProvider, params object[] contextParams)
         {
             // Create Consumer Instance
             var consumer = ActivatorUtilities.CreateInstance(serviceProvider, Type);
@@ -28,8 +28,15 @@ namespace RabbitLight.Consumer.Manager
             // Run Consumer Method
             var isAwaitable = MethodInfo.ReturnType.GetMethod(nameof(Task.GetAwaiter)) != null;
 
-            if (isAwaitable) await (dynamic)MethodInfo.Invoke(consumer, consumerParams);
-            else MethodInfo.Invoke(consumer, consumerParams);
+            try
+            {
+                if (isAwaitable) await (dynamic)MethodInfo.Invoke(consumer, consumerParams);
+                else MethodInfo.Invoke(consumer, consumerParams);
+            }
+            catch (TargetInvocationException ex)
+            {
+                throw ex.InnerException ?? ex;
+            }
         }
     }
 }

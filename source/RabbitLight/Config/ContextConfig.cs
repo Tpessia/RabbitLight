@@ -1,6 +1,9 @@
-﻿using RabbitMQ.Client.Events;
+﻿using RabbitLight.Consumer;
+using RabbitMQ.Client.Events;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 
 namespace RabbitLight.Config
@@ -23,6 +26,10 @@ namespace RabbitLight.Config
         /// Callback called after a consumer is invoked
         /// </summary>
         public Func<IServiceProvider, Type, BasicDeliverEventArgs, Task> OnEnd { get; set; }
+        /// <summary>
+        /// Callback called after a consumer throws an unhandled exception
+        /// </summary>
+        public Func<IServiceProvider, Exception, Type, BasicDeliverEventArgs, Task<bool>> OnError { get; set; }
 
         public void Validate()
         {
@@ -31,6 +38,10 @@ namespace RabbitLight.Config
 
             if (Consumers == null)
                 throw new ArgumentException("Invalid null value", nameof(Consumers));
+
+            Consumers ??= Assembly.GetEntryAssembly().GetTypes();
+            Consumers = Consumers.Where(x => typeof(ConsumerBase).IsAssignableFrom(x)
+                && !x.IsInterface && !x.IsAbstract);
         }
     }
 }

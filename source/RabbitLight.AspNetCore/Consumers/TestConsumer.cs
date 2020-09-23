@@ -49,10 +49,16 @@ namespace RabbitLight.AspNetCore.Consumers
                 + $"\r\nMsg/s: {TimeSpan.FromSeconds(1) / (duration / Count)}\r\n");
         }
 
-        [Queue("test-queue3", "test3")]
+        [Queue("test-discard", "discard")]
         public void TestDiscard(MessageContext<Test> context)
         {
-            throw new DiscardMessageException("Test");
+            throw new DiscardMessageException("Discard Test");
+        }
+
+        [Queue("test-error", "error")]
+        public void TestError(MessageContext<Test> context)
+        {
+            throw new SerializationException("Error Test");
         }
 
         [Queue("reset", "reset")]

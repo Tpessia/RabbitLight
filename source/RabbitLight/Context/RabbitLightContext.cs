@@ -21,12 +21,11 @@ namespace RabbitLight.Context
             _config = config;
             _config.Validate();
 
-            var consumerPool = CreateConnPool(sp, _config.ConnConfig);
-            _consumerManager = new ConsumerManager(sp, _config.ConnConfig, consumerPool,
-                _config.Consumers, _config.OnStart, _config.OnEnd);
-
             var publisherPool = CreateConnPool(sp, _config.ConnConfig);
             Publisher = new Publisher.Publisher(publisherPool);
+
+            var consumerPool = CreateConnPool(sp, _config.ConnConfig);
+            _consumerManager = new ConsumerManager(sp, consumerPool, _config);
 
             IConnectionPool CreateConnPool(IServiceProvider sp, ConnectionConfig config) =>
                 new ConnectionPool(config, sp.GetService<ILoggerFactory>()?.CreateLogger<ConnectionPool>());

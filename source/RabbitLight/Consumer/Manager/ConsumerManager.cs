@@ -16,49 +16,35 @@ namespace RabbitLight.Consumer.Manager
 {
     internal class ConsumerManager : IConsumerManager
     {
+        // Config
+        private readonly ContextConfig _config;
+
         // Connection
-        private readonly ConnectionConfig _connConfig;
         private readonly IConnectionPool _connPool;
 
         // Consumers
         private readonly IServiceProvider _sp;
-        private readonly IEnumerable<Type> _consumerTypes;
         private readonly List<ConsumerMetadata> _consumers = new List<ConsumerMetadata>();
-
-        // Consumer Events
-        private readonly Func<IServiceProvider, Type, BasicDeliverEventArgs, Task> _onStart;
-        private readonly Func<IServiceProvider, Type, BasicDeliverEventArgs, Task> _onEnd;
 
         // Helpers
         private readonly ILoggerFactory _loggerFactory;
         private readonly ILogger _logger;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
 
-        public ConsumerManager(IServiceProvider sp, ConnectionConfig connConfig,
-            IConnectionPool connManager, IEnumerable<Type> consumerTypes = null,
-            Func<IServiceProvider, Type, BasicDeliverEventArgs, Task> onStart = null,
-            Func<IServiceProvider, Type, BasicDeliverEventArgs, Task> onEnd = null)
+        public ConsumerManager(IServiceProvider sp, IConnectionPool connPool, ContextConfig config)
         {
             if (sp == null)
                 throw new ArgumentException("Invalid null value", nameof(sp));
 
-            if (connConfig == null)
-                throw new ArgumentException("Invalid null value", nameof(connConfig));
+            if (connPool == null)
+                throw new ArgumentException("Invalid null value", nameof(connPool));
 
-            if (connManager == null)
-                throw new ArgumentException("Invalid null value", nameof(connManager));
+            if (config == null)
+                throw new ArgumentException("Invalid null value", nameof(config));
 
             _sp = sp;
-
-            _connConfig = connConfig;
-            _connPool = connManager;
-
-            consumerTypes ??= Assembly.GetEntryAssembly().GetTypes();
-            _consumerTypes = consumerTypes.Where(x => typeof(ConsumerBase).IsAssignableFrom(x)
-                && !x.IsInterface && !x.IsAbstract);
-
-            _onStart = onStart;
-            _onEnd = onEnd;
+            _connPool = connPool;
+            _config = config;
 
             _loggerFactory = sp.GetService<ILoggerFactory>();
             _logger = _loggerFactory?.CreateLogger<ConsumerManager>();
@@ -69,12 +55,12 @@ namespace RabbitLight.Consumer.Manager
         public void Register()
         {
             // TODO: Prevent overusage of resources before full app startup??? needs testing
-            Task.Delay(2000, _cts.Token).Wait();
+            //Task.Delay(2000, _cts.Token).Wait();
 
             _logger?.LogInformation($"[RabbitLight] Registering consumers");
 
             RegisterConsumers().Wait();
-            RegisterListeners(_connConfig.MinChannels).Wait();
+            RegisterListeners(_config.ConnConfig.MinChannels).Wait();
 
             StartListenersMonitor();
 
@@ -93,10 +79,11 @@ namespace RabbitLight.Consumer.Manager
 
         private async Task RegisterConsumers()
         {
-            ValidateExchanges(_consumerTypes);
+            ValidateExchanges(_config.Consumers);
+            ValidateConsumers(_config.Consumers);
 
             _consumers.Clear();
-            foreach (var consumerType in _consumerTypes)
+            foreach (var consumerType in _config.Consumers)
             {
                 var logger = _loggerFactory?.CreateLogger(consumerType);
 
@@ -136,7 +123,7 @@ namespace RabbitLight.Consumer.Manager
         {
             for (int i = 0; i < channelCount; i++)
             {
-                var overMax = _connPool.TotalChannels >= _connConfig.MaxChannels;
+                var overMax = _connPool.TotalChannels >= _config.ConnConfig.MaxChannels;
                 if (overMax) break;
 
                 var channel = await _connPool.CreateConsumerChannel();
@@ -156,15 +143,15 @@ namespace RabbitLight.Consumer.Manager
                     try
                     {
                         // Start Callback
-                        if (_onStart != null)
-                            await _onStart.Invoke(scope.ServiceProvider, consumer.Type, ea);
+                        if (_config.OnStart != null)
+                            await _config.OnStart.Invoke(scope.ServiceProvider, consumer.Type, ea);
 
                         // Invoke Consumer
-                        await consumer.Invoke(scope.ServiceProvider, ea);
+                        await consumer.InvokeConsumer(scope.ServiceProvider, ea);
 
                         // End Callback
-                        if (_onEnd != null)
-                            await _onEnd.Invoke(scope.ServiceProvider, consumer.Type, ea);
+                        if (_config.OnEnd != null)
+                            await _config.OnEnd.Invoke(scope.ServiceProvider, consumer.Type, ea);
 
                         // ACK
                         // TODO: tentar fazer ACK de multiple?
@@ -173,22 +160,36 @@ namespace RabbitLight.Consumer.Manager
                     catch (DiscardMessageException ex)
                     {
                         // Error: Discard
+
                         consumer.Logger?.LogWarning(ex, $"[RabbitLight] Message discarded");
                         Nack(channel, ea.DeliveryTag);
                     }
                     catch (Exception ex)
                     {
-                        // Error: Requeue
-                        consumer.Logger?.LogError(ex, "[RabbitLight] Error while consuming, requeueing message");
-                        if (_connConfig.RequeueDelay.HasValue)
+                        // Error: Requeue or Discard
+
+                        var requeue = _config.OnError == null ? true
+                            : await _config.OnError.Invoke(scope.ServiceProvider, ex, consumer.Type, ea);
+
+                        if (requeue)
                         {
-                            var delay = (int)_connConfig.RequeueDelay.Value.TotalMilliseconds;
-                            _ = Task.Delay(delay, _cts.Token)
-                                .ContinueWith(t => Nack(channel, ea.DeliveryTag, requeue: true), _cts.Token);
+                            consumer.Logger?.LogError(ex, $"[RabbitLight] Error while consuming, requeueing message");
+
+                            if (_config.ConnConfig.RequeueDelay.HasValue)
+                            {
+                                var delay = (int)_config.ConnConfig.RequeueDelay.Value.TotalMilliseconds;
+                                _ = Task.Delay(delay, _cts.Token)
+                                    .ContinueWith(t => Nack(channel, ea.DeliveryTag, requeue: true), _cts.Token);
+                            }
+                            else
+                            {
+                                Nack(channel, ea.DeliveryTag, requeue: true);
+                            }
                         }
                         else
                         {
-                            Nack(channel, ea.DeliveryTag, requeue: true);
+                            consumer.Logger?.LogError(ex, "[RabbitLight] Error while consuming, discarding message");
+                            Nack(channel, ea.DeliveryTag, requeue: false);
                         }
                     }
                     finally
@@ -218,18 +219,18 @@ namespace RabbitLight.Consumer.Manager
         {
             Monitoring.Run(async () =>
             {
-                int expected = _connConfig.MinChannels;
+                int expected = _config.ConnConfig.MinChannels;
 
-                if (_connConfig.ScallingThreshold.HasValue)
+                if (_config.ConnConfig.ScallingThreshold.HasValue)
                 {
                     var tasks = _consumers.Select(x => _connPool.GetMessageCount(x.Queue.Name));
                     var requests = await Task.WhenAll(tasks);
                     var messageCount = requests.Sum();
 
-                    expected += (int)Math.Ceiling((double)messageCount / _connConfig.ScallingThreshold.Value);
+                    expected += (int)Math.Ceiling((double)messageCount / _config.ConnConfig.ScallingThreshold.Value);
                 }
 
-                expected = expected > _connConfig.MaxChannels ? _connConfig.MaxChannels : expected;
+                expected = expected > _config.ConnConfig.MaxChannels ? _config.ConnConfig.MaxChannels : expected;
                 var diff = expected - _connPool.TotalChannels;
 
                 if (diff != 0)
@@ -239,19 +240,19 @@ namespace RabbitLight.Consumer.Manager
                     await RegisterListeners(diff);
                 else if (diff < 0)
                     _connPool.DeleteChannels(-diff);
-            }, _connConfig.MonitoringInterval, _cts.Token,
+            }, _config.ConnConfig.MonitoringInterval, _cts.Token,
             ex => Task.Run(() => _logger?.LogError(ex, "[RabbitLight] Error while scalling")));
         }
 
         private void ValidateExchanges(IEnumerable<Type> consumerTypes)
         {
-            var exchanges = consumerTypes.Select(x => x.GetCustomAttributes<ExchangeAttribute>(false)).SelectMany(x => x);
+            var exchanges = consumerTypes.Select(x => GetExchangeMetadata(x).Item1).SelectMany(x => x);
             var duplicateExchanges = exchanges.GroupBy(x => x.Name).Where(x => x.Count() > 1);
 
             var invalidExchanges = new Dictionary<string, IEnumerable<string>>();
             foreach (var dups in duplicateExchanges)
             {
-                var types = dups.Select(x => x.Type);
+                var types = dups.Select(x => x.ExchangeType);
                 var uniqueTypes = types.Distinct();
                 if (uniqueTypes.Count() > 1) invalidExchanges.Add(dups.Key, uniqueTypes);
             }
@@ -259,6 +260,11 @@ namespace RabbitLight.Consumer.Manager
             if (invalidExchanges.Any())
                 throw new Exception("Multiple exchange declaration should be of a same type: "
                     + $"{string.Join("\r\n", invalidExchanges.Select(x => $"{x.Key}: {string.Join(", ", x.Value)}"))}");
+        }
+
+        private void ValidateConsumers(IEnumerable<Type> consumerTypes)
+        {
+            // TODO: validar se existem multiplos consumers consumindo a mesma queue
         }
 
         private (IEnumerable<ExchangeAttribute>, IEnumerable<MethodInfo>) GetExchangeMetadata(Type consumerType)
@@ -300,7 +306,7 @@ namespace RabbitLight.Consumer.Manager
 
         private void DeclareQueue(IModel channel, ExchangeAttribute exchange, QueueAttribute queue)
         {
-            channel.ExchangeDeclare(exchange: exchange.Name, type: exchange.Type, durable: true, autoDelete: false, arguments: null);
+            channel.ExchangeDeclare(exchange: exchange.Name, type: exchange.ExchangeType, durable: true, autoDelete: false, arguments: null);
             channel.QueueDeclare(queue: queue.Name, durable: true, exclusive: false, autoDelete: false, arguments: null);
 
             foreach (var routingKey in queue.RoutingKeys)

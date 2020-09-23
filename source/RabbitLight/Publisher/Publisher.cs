@@ -12,20 +12,20 @@ namespace RabbitLight.Publisher
 {
     internal class Publisher : IPublisher
     {
-        private readonly IConnectionPool _connManager;
+        private readonly IConnectionPool _connPool;
 
-        public Publisher(IConnectionPool connManager)
+        public Publisher(IConnectionPool connPool)
         {
-            if (connManager == null)
-                throw new ArgumentException("Invalid null value", nameof(connManager));
+            if (connPool == null)
+                throw new ArgumentException("Invalid null value", nameof(connPool));
 
-            _connManager = connManager;
+            _connPool = connPool;
         }
 
         public async Task Publish(string exchange, string routingKey, byte[] body, bool mandatory = false, IBasicProperties basicProperties = null)
         {
             // TODO: publishing on same channel vs different channels
-            var channel = await _connManager.GetOrCreateChannel();
+            var channel = await _connPool.GetOrCreateChannel();
             channel.BasicPublish(exchange, routingKey, mandatory, basicProperties, body);
         }
 
@@ -45,7 +45,7 @@ namespace RabbitLight.Publisher
         //    channel.BasicPublish(exchange, routingKey, mandatory, basicProperties, body);
         //}
 
-        public void Dispose() => _connManager.Dispose();
+        public void Dispose() => _connPool.Dispose();
 
         private string XmlSerialize<T>(T obj)
         {
