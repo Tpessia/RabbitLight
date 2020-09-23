@@ -249,22 +249,45 @@ namespace RabbitLight.Consumer.Manager
             var exchanges = consumerTypes.Select(x => GetExchangeMetadata(x).Item1).SelectMany(x => x);
             var duplicateExchanges = exchanges.GroupBy(x => x.Name).Where(x => x.Count() > 1);
 
-            var invalidExchanges = new Dictionary<string, IEnumerable<string>>();
+            var invalidExchanges = new List<string>();
             foreach (var dups in duplicateExchanges)
             {
                 var types = dups.Select(x => x.ExchangeType);
                 var uniqueTypes = types.Distinct();
-                if (uniqueTypes.Count() > 1) invalidExchanges.Add(dups.Key, uniqueTypes);
+                if (uniqueTypes.Count() > 1)
+                    invalidExchanges.Add($"{dups.Key}: {string.Join(", ", uniqueTypes)}");
             }
 
             if (invalidExchanges.Any())
-                throw new Exception("Multiple exchange declaration should be of a same type: "
-                    + $"{string.Join("\r\n", invalidExchanges.Select(x => $"{x.Key}: {string.Join(", ", x.Value)}"))}");
+                throw new Exception("Multiple exchange declarations should be of a same exchange type: "
+                    + $"{string.Join("; ", invalidExchanges)}");
         }
 
         private void ValidateConsumers(IEnumerable<Type> consumerTypes)
         {
-            // TODO: validar se existem multiplos consumers consumindo a mesma queue
+            var consumerRows = new List<(string, string)>();
+
+            var exchanges = consumerTypes.Select(x => GetExchangeMetadata(x));
+            foreach (var exchange1 in exchanges)
+            {
+                foreach (var exchange2 in exchange1.Item1)
+                {
+                    foreach (var methodInfo in exchange1.Item2)
+                    {
+                        var queues = methodInfo.GetCustomAttributes<QueueAttribute>(false);
+                        foreach (var queue in queues)
+                        {
+                            consumerRows.Add((exchange2.Name, queue.Name));
+                        }
+                    }
+                }
+            }
+
+            var duplicateConsumers = consumerRows.GroupBy(x => x).Where(x => x.Count() > 1)
+                .Select(x => x.First()).Select(x => $"{x.Item1}/{x.Item2}");
+            if (duplicateConsumers.Any())
+                throw new Exception("Cannot have duplicate consumers (exchange/queue pair): "
+                    + $"{string.Join("; ", duplicateConsumers)}");
         }
 
         private (IEnumerable<ExchangeAttribute>, IEnumerable<MethodInfo>) GetExchangeMetadata(Type consumerType)
