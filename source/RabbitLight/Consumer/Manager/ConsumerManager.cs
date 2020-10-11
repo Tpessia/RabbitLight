@@ -59,10 +59,10 @@ namespace RabbitLight.Consumer.Manager
 
             _logger?.LogInformation($"[RabbitLight] Registering consumers");
 
-            RegisterConsumers().Wait();
+            RegisterConsumers();
             RegisterListeners(_config.ConnConfig.MinChannels).Wait();
 
-            StartListenersMonitor();
+            StartMonitor();
 
             _logger?.LogInformation($"[RabbitLight] Successfully registered all consumers");
         }
@@ -77,7 +77,7 @@ namespace RabbitLight.Consumer.Manager
 
         #region Private
 
-        private async Task RegisterConsumers()
+        private void RegisterConsumers()
         {
             ValidateExchanges(_config.Consumers);
             ValidateConsumers(_config.Consumers);
@@ -98,12 +98,10 @@ namespace RabbitLight.Consumer.Manager
                     var (queues, consumerParamType) = queuesMetadata.Value;
 
                     // Declare Queues
-                    using var channel = await _connPool.CreateUnmanagedChannel();
                     foreach (var exchange in exchanges)
                     {
                         foreach (var queue in queues)
                         {
-                            DeclareQueue(channel, exchange, queue);
                             _consumers.Add(new ConsumerMetadata
                             {
                                 Type = consumerType,
@@ -134,6 +132,8 @@ namespace RabbitLight.Consumer.Manager
 
         private IModel RegisterListener(ConsumerMetadata consumer, IModel channel)
         {
+            DeclareQueue(channel, consumer.Exchange, consumer.Queue);
+
             var consumerEvent = new AsyncEventingBasicConsumer(channel);
             consumerEvent.Received += async (ch, ea) =>
             {
@@ -215,13 +215,21 @@ namespace RabbitLight.Consumer.Manager
             };
         }
 
-        private void StartListenersMonitor()
+        private void StartMonitor()
         {
-            Monitoring.Run(async () =>
-            {
-                int expected = _config.ConnConfig.MinChannels;
+            Monitoring.Run(() => ScaleListeners(),
+                _config.ConnConfig.MonitoringInterval, _cts.Token,
+                ex => Task.Run(() => _logger?.LogError(ex, "[RabbitLight] Error while scalling")));
+        }
 
-                if (_config.ConnConfig.ScallingThreshold.HasValue)
+        private async Task ScaleListeners()
+        {
+            int expected = _config.ConnConfig.MinChannels;
+
+            if (_config.ConnConfig.ScallingThreshold.HasValue)
+            {
+                // try catch in case the initial queues were killed
+                try
                 {
                     var tasks = _consumers.Select(x => _connPool.GetMessageCount(x.Queue.Name));
                     var requests = await Task.WhenAll(tasks);
@@ -229,19 +237,19 @@ namespace RabbitLight.Consumer.Manager
 
                     expected += (int)Math.Ceiling((double)messageCount / _config.ConnConfig.ScallingThreshold.Value);
                 }
+                catch { }
+            }
 
-                expected = expected > _config.ConnConfig.MaxChannels ? _config.ConnConfig.MaxChannels : expected;
-                var diff = expected - _connPool.TotalChannels;
+            expected = expected > _config.ConnConfig.MaxChannels ? _config.ConnConfig.MaxChannels : expected;
+            var diff = expected - _connPool.TotalChannels;
 
-                if (diff != 0)
-                    _logger?.LogWarning($"[RabbitLight] Scalling ({_connPool.TotalChannels} -> {expected})");
+            if (diff != 0)
+                _logger?.LogWarning($"[RabbitLight] Scalling ({_connPool.TotalChannels} -> {expected})");
 
-                if (diff > 0)
-                    await RegisterListeners(diff);
-                else if (diff < 0)
-                    _connPool.DeleteChannels(-diff);
-            }, _config.ConnConfig.MonitoringInterval, _cts.Token,
-            ex => Task.Run(() => _logger?.LogError(ex, "[RabbitLight] Error while scalling")));
+            if (diff > 0)
+                await RegisterListeners(diff);
+            else if (diff < 0)
+                _connPool.DeleteChannels(-diff);
         }
 
         private void ValidateExchanges(IEnumerable<Type> consumerTypes)

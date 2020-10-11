@@ -25,6 +25,8 @@ namespace RabbitLight.AspNetCore
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddLogging(opt => opt.AddConsole(c => c.TimestampFormat = "[HH:mm:ss.fff] "));
+
             services.AddControllers();
 
             services.AddRabbitLightContext<TestContext>(config =>
@@ -59,9 +61,7 @@ namespace RabbitLight.AspNetCore
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             if (env.IsDevelopment())
-            {
                 app.UseDeveloperExceptionPage();
-            }
 
             app.UseRouting();
 

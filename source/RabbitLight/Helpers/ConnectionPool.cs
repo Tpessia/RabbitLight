@@ -16,6 +16,7 @@ namespace RabbitLight.Helpers
     internal class ConnectionPool : IConnectionPool
     {
         private readonly ConnectionConfig _connConfig;
+        private readonly ILogger _logger;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
         private readonly Dictionary<IConnection, List<IModel>> _connPool = new Dictionary<IConnection, List<IModel>>();
 
@@ -32,12 +33,11 @@ namespace RabbitLight.Helpers
                 throw new ArgumentException("Invalid null value", nameof(connConfig));
 
             _connConfig = connConfig;
+            _logger = logger;
             _connConfig.DispatchConsumersAsync = true;
             _connConfig.RequestedChannelMax = _connConfig.ChannelsPerConnection;
 
-            Monitoring.Run(() => Task.Run(() => DisposeClosedChannels()),
-                _connConfig.MonitoringInterval, _cts.Token,
-                ex => Task.Run(() => logger?.LogError(ex, "[RabbitLight] Error while disposing connections/channels")));
+            StartMonitor();
         }
 
         #region Public
@@ -260,6 +260,13 @@ namespace RabbitLight.Helpers
         #endregion
 
         #region Private
+
+        private void StartMonitor()
+        {
+            Monitoring.Run(async () => { DisposeClosedChannels(); await CreateVHostAndConfigs(); },
+                _connConfig.MonitoringInterval, _cts.Token,
+                ex => Task.Run(() => _logger?.LogError(ex, "[RabbitLight] Error while disposing connections/channels")));
+        }
 
         private async Task<IConnection> CreateUnmanagedConnection()
         {
