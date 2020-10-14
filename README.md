@@ -14,6 +14,18 @@ To create a consumer, you just have to:
 
 **3.** Add `[Queue("my-queue")]` to bind a queue to a method from that class
 
+```csharp
+[Exchange("my-exchange")]
+public class MyConsumer : ConsumerBase
+{
+    [Queue("my-queue")]
+    public async Task MyQueue(MessageContext<MyMessage> context)
+    {
+        // ...
+    }
+}
+```
+
 ## How
 
 **1.** Create a Context
@@ -64,6 +76,13 @@ public void ConfigureServices(IServiceCollection services)
             logger?.LogInformation($"\r\nENDING {type.Name}: {ea.DeliveryTag}\r\n");
         });
 
+        // Optional callback called after the ACK message is sent
+        config.OnAck = (sp, type, ea) => Task.Run(() =>
+        {
+            var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
+            logger?.LogInformation($"\r\nACKED {type.Name}: {ea.DeliveryTag}\r\n");
+        });
+
         // Optional global error handler, whose return identifies the requeue strategy
         config.OnError = (sp, ex, type, ea) => Task.Run(() =>
         {
@@ -95,8 +114,8 @@ using RabbitLight.Consumer;
 using RabbitLight.Exceptions;
 // ...
 
-[Exchange("example-exchange1")]
-[Exchange("example-exchange2", ExchangeType.Fanout)] // can be of any ExchangeType accepted by RabbitMQ
+[Exchange("exchange1")]
+[Exchange("exchange2", ExchangeType.Fanout)] // can be of any ExchangeType accepted by RabbitMQ
 public class ExampleConsumer : ConsumerBase
 {
     private readonly ILogger<ExampleConsumer> _logger;
@@ -106,18 +125,18 @@ public class ExampleConsumer : ConsumerBase
         _logger = logger;
     }
 
-    [Queue("example-queue1")] // routing key defaults to "*"
-    [Queue("example-queue2", "example2", "example20")]
-    public async Task Example(MessageContext<Example> context)
+    [Queue("queue1")] // routing key defaults to "*"
+    [Queue("queue2", "key2", "key20")]
+    public async Task Example(MessageContext<ExampleMessage> context)
     {
         // Routes:
-        //     EXCHANGE           ROUTING KEY          QUEUE
-        // example-exchange1 ->         *          -> example-queue1
-        // example-exchange2 ->         *          -> example-queue1
-        // example-exchange1 ->      example2      -> example-queue2
-        // example-exchange2 ->      example2      -> example-queue2
-        // example-exchange1 ->      example20     -> example-queue2
-        // example-exchange2 ->      example20     -> example-queue2
+        // EXCHANGE         ROUTING KEY      QUEUE
+        // exchange1   ->       *         -> queue1
+        // exchange2   ->       *         -> queue1
+        // exchange1   ->      key2       -> queue2
+        // exchange2   ->      key2       -> queue2
+        // exchange1   ->      key20      -> queue2
+        // exchange2   ->      key20      -> queue2
 
         // Get the message
         // var msg = context.MessageAsBytes;
@@ -128,13 +147,13 @@ public class ExampleConsumer : ConsumerBase
         // Your code here...
     }
 
-    [Queue("example-queue3", "example3")]
-    public void ExampleDiscard(MessageContext<Example> context)
+    [Queue("queue3", "key3")]
+    public void ExampleDiscard(MessageContext<ExampleMessage> context)
     {
         // Routes:
-        //     EXCHANGE           ROUTING KEY          QUEUE
-        // example-exchange1 ->      example3      -> example-queue3
-        // example-exchange2 ->      example3      -> example-queue3
+        // EXCHANGE         ROUTING KEY      QUEUE
+        // exchange1   ->      key3       -> queue3
+        // exchange2   ->      key3       -> queue3
 
         // You may discard a message with DiscardMessageException
         // Any other exception will result in requeue
@@ -150,15 +169,39 @@ public class Example
 }
 ```
 
-Obs.: Remember that if another consumer class is listening to the same exchange and/or queues the messages will be routed acording to the ExchangeType selected.
+> Tip: instead of using hard-coded strings, you can also use defined constants:\
+> public const string MyExchange = "my-exchange";\
+> [Exchange(Exchanges.MyExchange)]
 
-e.g.:\
-Consumer1 with exchange ABC, queue 123 and routing key ABC123\
-Consumer2 with exchange ABC, queue 123 and routing key 123ABC
+#### Note
 
-When a message with the ABC123 routing key is received, there is no guarantee that it will be routed to Consumer1 rather than Consumer2.
+Remember that if another consumer class is listening to the same exchange and/or queues the messages will be routed acording to the ExchangeType selected.
 
-Think of the routing key declaration only as a binding rule that will be created in the RabbitMQ server, it has no priority relationship with the consumer that declared it.
+Example:
+
+```csharp
+[Exchange("exchangeA")]
+public class ConsumerA : ConsumerBase
+{
+    [Queue("queue1", "routingA")]
+    public async Task Example(MessageContext<ExampleMessage> context)
+    {
+        // ...
+    }
+}
+
+[Exchange("exchangeB")]
+public class ConsumerB : ConsumerBase
+{
+    [Queue("queue1", "routingB")]
+    public async Task Example(MessageContext<ExampleMessage> context)
+    {
+        // ...
+    }
+}
+```
+
+When a message with the **routingA** routing key is received, there is no guarantee that it will be routed to **ConsumerA** rather than **ConsumerB**, as they share the same destination queue. If there is need to check the routing key from a message, use `context.EventArgs.RoutingKey`.
 
 
 **4.** Create a publisher:
@@ -184,11 +227,23 @@ public class ExampleController : ControllerBase
     {
         var body = new Example { Text = "Hello, World!" };
 
-        // Publish message
-        // await _publisher.Publish("example-exchange1", "example1", new byte[] { });
-        // await _publisher.PublishString("example-exchange1", "example1", "Example");
-        // await _publisher.PublishXml("example-exchange1", "example1", body);
-        // await _publisher.PublishJson("example-exchange1", "example1", body);
+        // Publish byte[]
+        _publisher.Publish("exchange1", "key1", new byte[] { });
+
+        // Publish string
+        _publisher.PublishString("exchange1", "key1", "Hello, World!");
+
+        // Publish Json
+        _publisher.PublishJson("exchange1", "key1", body);
+
+        // Publish Xml
+        _publisher.PublishXml("exchange1", "key1", body);
+
+        // Publish Batch (byte[], string, Json and/or Xml)
+        _publisher.PublishBatch(new List<PublishBatch> {
+            new PublishBatch("exchange1", "key1", MessageType.String, "Hello, World!"),
+            new PublishBatch("exchange2", "key2", MessageType.Json, body),
+        });
 
         return "Message published!";
     }
@@ -232,7 +287,7 @@ public class ExampleController : ControllerBase
 | **ScallingThreshold** | Number of messages required to scale a new channel (e.g. 500 messages) or null to disable. |
 | **PrefetchCount** | Number of messages that will be cached by each channel at once. |
 | **ChannelsPerConnection** | Number of channels per connection (RabbitMQ's IConnection). |
-| **RequeueDelay** | Delay for when Nacking a message for requeue or null to 0. |
+| **RequeueDelay** | Delay for when Nacking a message for requeue or null to none. |
 | **MonitoringInterval** | Interval regarding channel monitoring tasks (health check and scalling) |
 
 ### Bonus: Console App
@@ -274,7 +329,10 @@ class Program
         });
 
         // Register ContextConsumers
-        context.Register();
+        context.Register().Wait();
+
+        // Publish a message
+        context.Publisher.PublishString("exchange1", "*", "Hello, World").Wait();
 
         // Prevent App From Closing
         Console.ReadLine();

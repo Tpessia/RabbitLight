@@ -20,7 +20,7 @@ namespace RabbitLight.Consumer.Manager
         private readonly ContextConfig _config;
 
         // Connection
-        private readonly IConnectionPool _connPool;
+        private readonly IConsumerConnectionPool _connPool;
 
         // Consumers
         private readonly IServiceProvider _sp;
@@ -31,7 +31,7 @@ namespace RabbitLight.Consumer.Manager
         private readonly ILogger _logger;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
 
-        public ConsumerManager(IServiceProvider sp, IConnectionPool connPool, ContextConfig config)
+        public ConsumerManager(IServiceProvider sp, IConsumerConnectionPool connPool, ContextConfig config)
         {
             if (sp == null)
                 throw new ArgumentException("Invalid null value", nameof(sp));
@@ -52,15 +52,12 @@ namespace RabbitLight.Consumer.Manager
 
         #region Public
 
-        public void Register()
+        public async Task Register()
         {
-            // TODO: Prevent overusage of resources before full app startup??? needs testing
-            //Task.Delay(2000, _cts.Token).Wait();
-
             _logger?.LogInformation($"[RabbitLight] Registering consumers");
 
             RegisterConsumers();
-            RegisterListeners(_config.ConnConfig.MinChannels).Wait();
+            await RegisterListeners(_config.ConnConfig.MinChannels);
 
             StartMonitor();
 
@@ -119,12 +116,20 @@ namespace RabbitLight.Consumer.Manager
 
         private async Task RegisterListeners(int channelCount)
         {
+            using (var channel = await _connPool.CreateUnmanagedChannel())
+            {
+                foreach (var consumer in _consumers)
+                    DeclareQueue(channel, consumer.Exchange, consumer.Queue);
+            }
+
             for (int i = 0; i < channelCount; i++)
             {
                 var overMax = _connPool.TotalChannels >= _config.ConnConfig.MaxChannels;
                 if (overMax) break;
 
-                var channel = await _connPool.CreateConsumerChannel();
+                _logger?.LogDebug($"[RabbitLight] Creating listeners ({i+1}/{channelCount})");
+
+                var channel = await _connPool.CreateNewChannel();
                 foreach (var consumer in _consumers)
                     RegisterListener(consumer, channel);
             }
@@ -132,11 +137,13 @@ namespace RabbitLight.Consumer.Manager
 
         private IModel RegisterListener(ConsumerMetadata consumer, IModel channel)
         {
-            DeclareQueue(channel, consumer.Exchange, consumer.Queue);
-
             var consumerEvent = new AsyncEventingBasicConsumer(channel);
             consumerEvent.Received += async (ch, ea) =>
             {
+                // Will throw exception if channel has been deleted
+                var allowed = _connPool.NotifyConsumerStart(channel);
+                if (!allowed) return;
+
                 // Create New DI Scope
                 using (var scope = _sp.CreateScope())
                 {
@@ -153,9 +160,12 @@ namespace RabbitLight.Consumer.Manager
                         if (_config.OnEnd != null)
                             await _config.OnEnd.Invoke(scope.ServiceProvider, consumer.Type, ea);
 
-                        // ACK
-                        // TODO: tentar fazer ACK de multiple?
+                        // Ack
                         Ack(channel, ea.DeliveryTag);
+
+                        // Ack Callback
+                        if (_config.OnEnd != null)
+                            await _config.OnAck.Invoke(scope.ServiceProvider, consumer.Type, ea);
                     }
                     catch (DiscardMessageException ex)
                     {
@@ -194,18 +204,21 @@ namespace RabbitLight.Consumer.Manager
                     }
                     finally
                     {
+                        _connPool.NotifyConsumerEnd(channel);
                         await Task.Yield();
                     }
                 }
             };
 
-            // TODO: tentar cancelar consumer antes de fechar o channel
             // the consumer tag identifies the subscription when it has to be cancelled
             string consumerTag = channel.BasicConsume(consumer.Queue.Name, false, consumerEvent);
 
             return channel;
 
-            void Ack(IModel channel, ulong deliveryTag, bool multiple = false) {
+            // TODO: during application shut down, the consumer might have runned,
+            // but the ACK might be unable to run
+            void Ack(IModel channel, ulong deliveryTag, bool multiple = false)
+            {
                 if (channel.IsOpen) channel.BasicAck(deliveryTag, multiple);
             };
 
@@ -217,13 +230,15 @@ namespace RabbitLight.Consumer.Manager
 
         private void StartMonitor()
         {
-            Monitoring.Run(() => ScaleListeners(),
-                _config.ConnConfig.MonitoringInterval, _cts.Token,
+            Helpers.Monitor.Run(() => ScaleListeners(),
+                TimeSpan.FromSeconds(10), _config.ConnConfig.MonitoringInterval, _cts.Token,
                 ex => Task.Run(() => _logger?.LogError(ex, "[RabbitLight] Error while scalling")));
         }
 
         private async Task ScaleListeners()
         {
+            _logger?.LogDebug($"\r\n[RabbitLight] Start scalling");
+
             int expected = _config.ConnConfig.MinChannels;
 
             if (_config.ConnConfig.ScallingThreshold.HasValue)
@@ -231,7 +246,7 @@ namespace RabbitLight.Consumer.Manager
                 // try catch in case the initial queues were killed
                 try
                 {
-                    var tasks = _consumers.Select(x => _connPool.GetMessageCount(x.Queue.Name));
+                    var tasks = _consumers.Select(x => RabbitHttpClient.GetMessageCount(_config.ConnConfig, x.Queue.Name));
                     var requests = await Task.WhenAll(tasks);
                     var messageCount = requests.Sum();
 
@@ -240,16 +255,23 @@ namespace RabbitLight.Consumer.Manager
                 catch { }
             }
 
+            _logger?.LogDebug($"[RabbitLight] Expected channels: {expected}");
+
             expected = expected > _config.ConnConfig.MaxChannels ? _config.ConnConfig.MaxChannels : expected;
             var diff = expected - _connPool.TotalChannels;
 
+            _logger?.LogDebug($"[RabbitLight] Total channels: {_connPool.TotalChannels}");
+            _logger?.LogDebug($"[RabbitLight] Diff channels: {diff}");
+
             if (diff != 0)
-                _logger?.LogWarning($"[RabbitLight] Scalling ({_connPool.TotalChannels} -> {expected})");
+                _logger?.LogDebug($"[RabbitLight] Scalling ({_connPool.TotalChannels} -> {expected})");
 
             if (diff > 0)
                 await RegisterListeners(diff);
             else if (diff < 0)
-                _connPool.DeleteChannels(-diff);
+                await _connPool.DeleteChannels(-diff);
+
+            _logger?.LogDebug($"[RabbitLight] End scalling\r\n");
         }
 
         private void ValidateExchanges(IEnumerable<Type> consumerTypes)

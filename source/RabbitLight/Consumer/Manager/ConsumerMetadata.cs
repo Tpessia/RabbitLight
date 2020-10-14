@@ -1,13 +1,12 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using RabbitLight.Exceptions;
 using System;
 using System.Reflection;
 using System.Threading.Tasks;
 
 namespace RabbitLight.Consumer.Manager
 {
-    public class ConsumerMetadata
+    internal class ConsumerMetadata
     {
         public Type Type { get; set; }
         public Type ParamType { get; set; }

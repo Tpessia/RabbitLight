@@ -4,8 +4,28 @@ using System;
 
 namespace RabbitLight.Config
 {
-    public class ConnectionConfig : ConnectionFactory
+    public class ConnectionConfig
     {
+        /// <summary>
+        /// Username to use when authenticating to the server
+        /// </summary>
+        public string UserName { get; set; }
+        /// <summary>
+        /// Password to use when authenticating to the server
+        /// </summary>
+        public string Password { get; set; }
+        /// <summary>
+        /// Virtual host to access during this connection 
+        /// </summary>
+        public string VirtualHost { get; set; }
+        /// <summary>
+        /// The host to connect to
+        /// </summary>
+        public string HostName { get; set; }
+        /// <summary>
+        /// The port to connect on
+        /// </summary>
+        public ushort Port { get; set; }
         /// <summary>
         /// Port where RabbitMQ management UI plugin is available
         /// </summary>
@@ -37,7 +57,7 @@ namespace RabbitLight.Config
         /// </summary>
         public ushort ChannelsPerConnection { get; set; } = 25;
         /// <summary>
-        /// Delay for when Nacking a message for requeue
+        /// Delay for when Nacking a message for requeue or null to none
         /// </summary>
         public TimeSpan? RequeueDelay { get; set; }
         /// <summary>
@@ -51,7 +71,7 @@ namespace RabbitLight.Config
 
         public ConnectionConfig(string userName, string password, string vhost, string hostname, ushort port, ushort portApi, ushort? minChannels = null, ushort? maxChannels = null,
             ushort? scallingThreshold = null, ushort? prefetchCount = null, ushort? channelsPerConnection = null,
-            TimeSpan? requeueDelay = null, TimeSpan? monitoringInterval = null)
+            TimeSpan? requeueDelay = null, TimeSpan? monitoringInterval = null, TimeSpan? publisherChannelTimeout = null)
         {
             UserName = userName;
             Password = password;
@@ -69,6 +89,25 @@ namespace RabbitLight.Config
             MonitoringInterval = monitoringInterval ?? MonitoringInterval;
 
             Validate(this);
+        }
+
+        public ConnectionFactory CreateConnectionFactory()
+        {
+            return new ConnectionFactory()
+            {
+                UserName = UserName,
+                Password = Password,
+                VirtualHost = VirtualHost,
+                HostName = HostName,
+                Port = Port,
+                RequestedChannelMax = ChannelsPerConnection,
+                DispatchConsumersAsync = true,
+                // https://www.rabbitmq.com/dotnet-api-guide.html#recovery
+                AutomaticRecoveryEnabled = true,
+                NetworkRecoveryInterval = TimeSpan.FromSeconds(10),
+                // https://www.rabbitmq.com/dotnet-api-guide.html#topology-recovery
+                TopologyRecoveryEnabled = true
+            };
         }
 
         public static ConnectionConfig FromConfig(IConfiguration configuration)

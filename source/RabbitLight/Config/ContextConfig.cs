@@ -27,6 +27,10 @@ namespace RabbitLight.Config
         /// </summary>
         public Func<IServiceProvider, Type, BasicDeliverEventArgs, Task> OnEnd { get; set; }
         /// <summary>
+        /// Callback called after the ACK message is sent
+        /// </summary>
+        public Func<IServiceProvider, Type, BasicDeliverEventArgs, Task> OnAck { get; set; }
+        /// <summary>
         /// Callback called after a consumer throws an unhandled exception
         /// </summary>
         public Func<IServiceProvider, Exception, Type, BasicDeliverEventArgs, Task<bool>> OnError { get; set; }

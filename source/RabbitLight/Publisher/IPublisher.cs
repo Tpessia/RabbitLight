@@ -1,5 +1,6 @@
 ﻿using RabbitMQ.Client;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace RabbitLight.Publisher
@@ -10,5 +11,6 @@ namespace RabbitLight.Publisher
         Task PublishString(string exchange, string routingKey, string body, bool mandatory = false, IBasicProperties basicProperties = null);
         Task PublishJson<T>(string exchange, string routingKey, T body, bool mandatory = false, IBasicProperties basicProperties = null);
         Task PublishXml<T>(string exchange, string routingKey, T body, bool mandatory = false, IBasicProperties basicProperties = null);
+        Task PublishBatch(IEnumerable<PublishBatch> content);
     }
 }

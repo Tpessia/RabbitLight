@@ -2,6 +2,7 @@
 using RabbitLight.Helpers;
 using RabbitMQ.Client;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -12,9 +13,9 @@ namespace RabbitLight.Publisher
 {
     internal class Publisher : IPublisher
     {
-        private readonly IConnectionPool _connPool;
+        private readonly IPublisherConnectionPool _connPool;
 
-        public Publisher(IConnectionPool connPool)
+        public Publisher(IPublisherConnectionPool connPool)
         {
             if (connPool == null)
                 throw new ArgumentException("Invalid null value", nameof(connPool));
@@ -24,7 +25,6 @@ namespace RabbitLight.Publisher
 
         public async Task Publish(string exchange, string routingKey, byte[] body, bool mandatory = false, IBasicProperties basicProperties = null)
         {
-            // TODO: publishing on same channel vs different channels
             var channel = await _connPool.GetOrCreateChannel();
             channel.BasicPublish(exchange, routingKey, mandatory, basicProperties, body);
         }
@@ -38,12 +38,19 @@ namespace RabbitLight.Publisher
         public Task PublishXml<T>(string exchange, string routingKey, T body, bool mandatory = false, IBasicProperties basicProperties = null) =>
             PublishString(exchange, routingKey, XmlSerialize(body), mandatory, basicProperties);
 
-        // TODO: publish batch
-        //public async Task PublishBatch(string exchange, string routingKey, bool mandatory, IBasicProperties basicProperties, byte[] body)
-        //{
-        //    var channel = await _connManager.GetOrCreateChannel();
-        //    channel.BasicPublish(exchange, routingKey, mandatory, basicProperties, body);
-        //}
+        public async Task PublishBatch(IEnumerable<PublishBatch> content)
+        {
+            var channel = await _connPool.GetOrCreateChannel();
+            var batch = channel.CreateBasicPublishBatch();
+
+            foreach (var item in content)
+            {
+                var body = ParseMessage(item.Body, item.MessageType);
+                batch.Add(item.Exchange, item.RoutingKey, item.Mandatory, item.BasicProperties, body);
+            }
+
+            batch.Publish();
+        }
 
         public void Dispose() => _connPool.Dispose();
 
@@ -57,6 +64,25 @@ namespace RabbitLight.Publisher
                     serializer.Serialize(writer, obj);
                     return sw.ToString();
                 }
+            }
+        }
+
+        private byte[] ParseMessage(object message, MessageType type)
+        {
+            switch (type)
+            {
+                case MessageType.Byte:
+                    if (message is byte[]) return (byte[])message;
+                    else throw new ArgumentException("Message should be of type byte[]");
+                case MessageType.String:
+                    if (message is string) return Encoding.UTF8.GetBytes((string)message);
+                    else throw new ArgumentException("Message should be of type string");
+                case MessageType.Json:
+                    return Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(message));
+                case MessageType.Xml:
+                    return Encoding.UTF8.GetBytes(XmlSerialize(message));
+                default:
+                    throw new ArgumentException($"Invalid message type {type.ToString()}");
             }
         }
     }
