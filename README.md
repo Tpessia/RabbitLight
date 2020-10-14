@@ -1,3 +1,13 @@
+[![NuGet Status](https://img.shields.io/nuget/v/RabbitLight?color=003060)](https://www.nuget.org/packages/RabbitLight)
+[![NuGet Status](https://img.shields.io/github/languages/code-size/Tpessia/RabbitLight?label=size&color=003060)](https://www.nuget.org/packages/RabbitLight)
+<!-- [![NuGet Status](https://img.shields.io/nuget/dt/RabbitLight?color=003060)](https://www.nuget.org/packages/RabbitLight) -->
+
+*Samples: [RabbitLight.Samples](https://github.com/Tpessia/RabbitLight.Samples)*
+<br>
+<br>
+
+<img align="left" width="45" height="45" src="https://raw.githubusercontent.com/Tpessia/RabbitLight/master/source/rabbit-shape.png" alt="Icon">
+
 # RabbitLight
 
 ## What
