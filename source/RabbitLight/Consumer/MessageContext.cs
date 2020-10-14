@@ -12,7 +12,7 @@ namespace RabbitLight.Consumer
     {
         public BasicDeliverEventArgs EventArgs { get; set; }
 
-        public byte[] MessageAsBytes() => EventArgs.Body;
+        public byte[] MessageAsBytes() => EventArgs.Body.ToArray();
 
         public string MessageAsString() => Encoding.UTF8.GetString(MessageAsBytes());
 
