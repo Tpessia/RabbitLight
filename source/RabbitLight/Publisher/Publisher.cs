@@ -67,7 +67,7 @@ namespace RabbitLight.Publisher
             }
         }
 
-        private byte[] ParseMessage(object message, MessageType type)
+        private ReadOnlyMemory<byte> ParseMessage(object message, MessageType type)
         {
             switch (type)
             {
