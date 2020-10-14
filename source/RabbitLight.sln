@@ -1,17 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
-VisualStudioVersion = 16.0.30406.217
+VisualStudioVersion = 16.0.30523.141
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RabbitLight", "RabbitLight\RabbitLight.csproj", "{3255EA3D-D8D5-464F-A0A4-6F8AAEBCD2D4}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "1 - RabbitLight", "1 - RabbitLight", "{9DB35583-9900-4665-BC06-85DBF7CEB1B5}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "2 - Examples", "2 - Examples", "{0841FAD4-6B81-4699-81D5-0B239EFA81E2}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RabbitLight.AspNetCore", "..\examples\RabbitLight.AspNetCore\RabbitLight.AspNetCore.csproj", "{B077C024-262C-4988-A548-02CE675278CF}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RabbitLight.ConsoleApp", "..\examples\RabbitLight.ConsoleApp\RabbitLight.ConsoleApp.csproj", "{1422FBEB-A90E-45B8-92ED-9289CDEDE6D5}"
+Project("{34233C67-40BD-4F94-9DD4-9F95D92AEA50}") = "RabbitLight", "RabbitLight.csproj", "{0765AC5A-E536-4C8F-B1CB-4EDB401F1E0C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -19,28 +11,15 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{3255EA3D-D8D5-464F-A0A4-6F8AAEBCD2D4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{3255EA3D-D8D5-464F-A0A4-6F8AAEBCD2D4}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{3255EA3D-D8D5-464F-A0A4-6F8AAEBCD2D4}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{3255EA3D-D8D5-464F-A0A4-6F8AAEBCD2D4}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B077C024-262C-4988-A548-02CE675278CF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B077C024-262C-4988-A548-02CE675278CF}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B077C024-262C-4988-A548-02CE675278CF}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B077C024-262C-4988-A548-02CE675278CF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{1422FBEB-A90E-45B8-92ED-9289CDEDE6D5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{1422FBEB-A90E-45B8-92ED-9289CDEDE6D5}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{1422FBEB-A90E-45B8-92ED-9289CDEDE6D5}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{1422FBEB-A90E-45B8-92ED-9289CDEDE6D5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0765AC5A-E536-4C8F-B1CB-4EDB401F1E0C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0765AC5A-E536-4C8F-B1CB-4EDB401F1E0C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0765AC5A-E536-4C8F-B1CB-4EDB401F1E0C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0765AC5A-E536-4C8F-B1CB-4EDB401F1E0C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
-	GlobalSection(NestedProjects) = preSolution
-		{3255EA3D-D8D5-464F-A0A4-6F8AAEBCD2D4} = {9DB35583-9900-4665-BC06-85DBF7CEB1B5}
-		{B077C024-262C-4988-A548-02CE675278CF} = {0841FAD4-6B81-4699-81D5-0B239EFA81E2}
-		{1422FBEB-A90E-45B8-92ED-9289CDEDE6D5} = {0841FAD4-6B81-4699-81D5-0B239EFA81E2}
-	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {71EC3181-E90B-4AB4-AB2A-3A49791162CE}
+		SolutionGuid = {4AC785DE-2EB2-4957-BA1B-1B8E60A6FAEA}
 	EndGlobalSection
 EndGlobal
