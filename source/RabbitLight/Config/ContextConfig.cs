@@ -43,7 +43,7 @@ namespace RabbitLight.Config
             if (Consumers == null)
                 throw new ArgumentException("Invalid null value", nameof(Consumers));
 
-            Consumers ??= Assembly.GetEntryAssembly().GetTypes();
+            Consumers = Consumers ?? Assembly.GetEntryAssembly().GetTypes();
             Consumers = Consumers.Where(x => typeof(ConsumerBase).IsAssignableFrom(x)
                 && !x.IsInterface && !x.IsAbstract);
         }

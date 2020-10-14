@@ -12,16 +12,7 @@ namespace RabbitLight.Consumer
     {
         public BasicDeliverEventArgs EventArgs { get; set; }
 
-        public byte[] MessageAsBytes()
-        {
-            // Workaround for RabbitMQ typing inconsistence
-            dynamic body = EventArgs.Body;
-            if (body is ReadOnlyMemory<byte>)
-                return body.ToArray();
-            else if (body is byte[])
-                return body;
-            throw new InvalidCastException("EventArgs.Body is of invalid type");
-        }
+        public byte[] MessageAsBytes() => EventArgs.Body;
 
         public string MessageAsString() => Encoding.UTF8.GetString(MessageAsBytes());
 
@@ -46,9 +37,11 @@ namespace RabbitLight.Consumer
         {
             try
             {
-                using TextReader reader = new StringReader(MessageAsString());
-                var serializer = new XmlSerializer(typeof(T));
-                return (T)serializer.Deserialize(reader);
+                using (TextReader reader = new StringReader(MessageAsString()))
+                {
+                    var serializer = new XmlSerializer(typeof(T));
+                    return (T)serializer.Deserialize(reader);
+                }
             }
             catch (Exception ex)
             {

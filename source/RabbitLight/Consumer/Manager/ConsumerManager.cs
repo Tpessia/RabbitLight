@@ -217,14 +217,14 @@ namespace RabbitLight.Consumer.Manager
 
             // TODO: during application shut down, the consumer might have runned,
             // but the ACK might be unable to run
-            void Ack(IModel channel, ulong deliveryTag, bool multiple = false)
+            void Ack(IModel ch, ulong deliveryTag, bool multiple = false)
             {
-                if (channel.IsOpen) channel.BasicAck(deliveryTag, multiple);
+                if (ch.IsOpen) ch.BasicAck(deliveryTag, multiple);
             };
 
-            void Nack(IModel channel, ulong deliveryTag, bool multiple = false, bool requeue = false)
+            void Nack(IModel ch, ulong deliveryTag, bool multiple = false, bool requeue = false)
             {
-                if (channel.IsOpen) channel.BasicNack(deliveryTag, multiple, requeue);
+                if (ch.IsOpen) ch.BasicNack(deliveryTag, multiple, requeue);
             };
         }
 

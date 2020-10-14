@@ -4,15 +4,15 @@
 
 RabbitLight is a RabbitMQ Client for .NET developed with simplicity in mind.
 
-Messages are routed to their respective consumers using Data Annotations, similar to the `[Route("my-route")]` attribute used on AspNetCore projects.
+Messages are routed to their respective consumers using Data Annotations, similar to the `[Route(MY-ROUTE)]` attribute used on AspNetCore projects.
 
 To create a consumer, you just have to:
 
 **1.** Create a class that inherits from `ConsumerBase`
 
-**2.** Use `[Exchange("my-exchange")]` to bind a exchange to that class
+**2.** Use `[Exchange(MY-EXCHANGE)]` to bind a exchange to that class
 
-**3.** Add `[Queue("my-queue")]` to bind a queue to a method from that class
+**3.** Add `[Queue(MY-QUEUE)]` to bind a queue to a method from that class
 
 ```csharp
 [Exchange("my-exchange")]
@@ -129,15 +129,6 @@ public class ExampleConsumer : ConsumerBase
     [Queue("queue2", "key2", "key20")]
     public async Task Example(MessageContext<ExampleMessage> context)
     {
-        // Routes:
-        // EXCHANGE         ROUTING KEY      QUEUE
-        // exchange1   ->       *         -> queue1
-        // exchange2   ->       *         -> queue1
-        // exchange1   ->      key2       -> queue2
-        // exchange2   ->      key2       -> queue2
-        // exchange1   ->      key20      -> queue2
-        // exchange2   ->      key20      -> queue2
-
         // Get the message
         // var msg = context.MessageAsBytes;
         // var msg = context.MessageAsString;
@@ -150,11 +141,6 @@ public class ExampleConsumer : ConsumerBase
     [Queue("queue3", "key3")]
     public void ExampleDiscard(MessageContext<ExampleMessage> context)
     {
-        // Routes:
-        // EXCHANGE         ROUTING KEY      QUEUE
-        // exchange1   ->      key3       -> queue3
-        // exchange2   ->      key3       -> queue3
-
         // You may discard a message with DiscardMessageException
         // Any other exception will result in requeue
         var msg = context.MessageFromJson();
@@ -176,32 +162,6 @@ public class Example
 #### Note
 
 Remember that if another consumer class is listening to the same exchange and/or queues the messages will be routed acording to the ExchangeType selected.
-
-Example:
-
-```csharp
-[Exchange("exchangeA")]
-public class ConsumerA : ConsumerBase
-{
-    [Queue("queue1", "routingA")]
-    public async Task Example(MessageContext<ExampleMessage> context)
-    {
-        // ...
-    }
-}
-
-[Exchange("exchangeB")]
-public class ConsumerB : ConsumerBase
-{
-    [Queue("queue1", "routingB")]
-    public async Task Example(MessageContext<ExampleMessage> context)
-    {
-        // ...
-    }
-}
-```
-
-When a message with the **routingA** routing key is received, there is no guarantee that it will be routed to **ConsumerA** rather than **ConsumerB**, as they share the same destination queue. If there is need to check the routing key from a message, use `context.EventArgs.RoutingKey`.
 
 **4.** Create a publisher:
 
@@ -225,20 +185,11 @@ public class ExampleController : ControllerBase
     public async Task<string> SendMessage()
     {
         var body = new Example { Text = "Hello, World!" };
-
-        // Publish byte[]
+        
         _publisher.Publish("exchange1", "key1", new byte[] { });
-
-        // Publish string
         _publisher.PublishString("exchange1", "key1", "Hello, World!");
-
-        // Publish Json
         _publisher.PublishJson("exchange1", "key1", body);
-
-        // Publish Xml
         _publisher.PublishXml("exchange1", "key1", body);
-
-        // Publish Batch (byte[], string, Json and/or Xml)
         _publisher.PublishBatch(new List<PublishBatch> {
             new PublishBatch("exchange1", "key1", MessageType.String, "Hello, World!"),
             new PublishBatch("exchange2", "key2", MessageType.Json, body),
@@ -254,90 +205,19 @@ public class ExampleController : ControllerBase
 ```json
 {
   "RabbitLight": {
-    "UserName": "guest",
-    "Password": "guest",
-    "VirtualHost": "/",
-    "HostName": "127.0.0.1",
-    "Port": 5672,
-    "PortApi": 15672,
-    "MinChannels": 10,
-    "MaxChannels": 50,
-    "ScallingThreshold": 500,
-    "PrefetchCount": 10,
-    "ChannelsPerConnection": 20,
-    "RequeueDelay": "00:00:05",
-    "MonitoringInterval": "00:01:00"
+    "UserName": "guest", // Username to use when authenticating to the server.
+    "Password": "guest", // Password to use when authenticating to the server.
+    "VirtualHost": "/", // Virtual host to access during this connection.
+    "HostName": "127.0.0.1", // The host to connect to.
+    "Port": 5672, // The port to connect on.
+    "PortApi": 15672, // Port where RabbitMQ management UI plugin is available.
+    "MinChannels": 10, // Minimum number of parallel channels.
+    "MaxChannels": 50, // Maximum number of parallel channels.
+    "ScallingThreshold": 500, // Number of messages required to scale a new channel (e.g. 500 messages) or null to disable.
+    "PrefetchCount": 10, // Number of messages that will be cached by each channel at once.
+    "ChannelsPerConnection": 20, // Number of channels per connection (RabbitMQ's IConnection).
+    "RequeueDelay": "00:00:05", // Delay for when Nacking a message for requeue or null to none.
+    "MonitoringInterval": "00:01:00" // Interval regarding channel monitoring tasks (health check and scalling)
   }
-}
-```
-
-| Field | Description |
-| ----- | ----------- |
-| **RabbitMQ Config:** | ---------------------- |
-| **UserName** | Username to use when authenticating to the server. |
-| **Password** | Password to use when authenticating to the server. |
-| **VirtualHost** | Virtual host to access during this connection. |
-| **HostName** | The host to connect to. |
-| **Port** | The port to connect on. |
-| **RabbitLight Config:** | ---------------------- |
-| **PortApi** | Port where RabbitMQ management UI plugin is available. |
-| **MinChannels** | Minimum number of parallel channels. |
-| **MaxChannels** | Maximum number of parallel channels. |
-| **ScallingThreshold** | Number of messages required to scale a new channel (e.g. 500 messages) or null to disable. |
-| **PrefetchCount** | Number of messages that will be cached by each channel at once. |
-| **ChannelsPerConnection** | Number of channels per connection (RabbitMQ's IConnection). |
-| **RequeueDelay** | Delay for when Nacking a message for requeue or null to none. |
-| **MonitoringInterval** | Interval regarding channel monitoring tasks (health check and scalling) |
-
-### Bonus: Console App
-
-Using RabbittLight with a simple Console App
-
-```csharp
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using RabbitLight.Config;
-using RabbitLight.ConsoleApp.Consumers.Context;
-using System;
-using System.IO;
-using System.Reflection;
-
-class Program
-{
-    static void Main(string[] args)
-    {
-        // Build appsettings.json Configurations
-        var env = Environment.GetEnvironmentVariable("ENVIRONMENT") ?? "Development";
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetParent(AppContext.BaseDirectory).FullName)
-            .AddJsonFile("appsettings.json", false, false)
-            .AddJsonFile($"appsettings.{env}.json", false, false)
-            .Build();
-
-        // Build Service Provider
-        var serviceProvider = new ServiceCollection()
-            .AddLogging(c => c.AddConsole())
-            .BuildServiceProvider();
-
-        // Create Context
-        var context = new TestContext(serviceProvider, new ContextConfig
-        {
-            ConnConfig = ConnectionConfig.FromConfig(configuration.GetSection("RabbitLight")),
-            Consumers = Assembly.GetEntryAssembly().GetTypes()
-        });
-
-        // Register ContextConsumers
-        context.Register().Wait();
-
-        // Publish a message
-        context.Publisher.PublishString("exchange1", "*", "Hello, World").Wait();
-
-        // Prevent App From Closing
-        Console.ReadLine();
-
-        // Dispose Dependencies
-        serviceProvider.Dispose();
-    }
 }
 ```
