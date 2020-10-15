@@ -83,7 +83,7 @@ public class ExampleContext : RabbitLightContext
 
 ```csharp
 // ...
-using RabbitLight.Extentions;
+using RabbitLight.Extensions;
 // ...
 
 public void ConfigureServices(IServiceCollection services)

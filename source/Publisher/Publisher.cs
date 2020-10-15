@@ -57,7 +57,7 @@ namespace RabbitLight.Publisher
         private string XmlSerialize<T>(T obj)
         {
             var serializer = new XmlSerializer(typeof(T));
-            using (var sw = new StringWriter())
+            using (var sw = new Utf8StringWriter())
             {
                 using (var writer = XmlWriter.Create(sw))
                 {
@@ -65,6 +65,11 @@ namespace RabbitLight.Publisher
                     return sw.ToString();
                 }
             }
+        }
+
+        private class Utf8StringWriter : StringWriter
+        {
+            public override Encoding Encoding => Encoding.UTF8;
         }
 
         private byte[] ParseMessage(object message, MessageType type)

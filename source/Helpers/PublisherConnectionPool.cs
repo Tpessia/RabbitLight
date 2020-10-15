@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using RabbitLight.Config;
 using RabbitLight.Extensions;
-using RabbitLight.Extentions;
+using RabbitLight.Extensions;
 using RabbitMQ.Client;
 using System;
 using System.Collections.Generic;
