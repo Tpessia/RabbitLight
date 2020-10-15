@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace RabbitLight.Extentions
+namespace RabbitLight.Extensions
 {
-    public static class LinqExtensions
+    internal static class LinqExtensions
     {
         public static void RemoveAll<T,U>(this Dictionary<T,U> dictionary, Func<KeyValuePair<T, U>, bool> shouldDelete)
         {
