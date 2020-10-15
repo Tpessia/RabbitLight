@@ -16,7 +16,9 @@ RabbitLight is a RabbitMQ Client for .NET developed with simplicity in mind.
 
 Messages are routed to their respective consumers using Data Annotations, similar to the `[Route("my-route")]` attribute used on AspNetCore projects.
 
-To create a consumer, you just have to:
+It also comes with Auto Scaling and Self Healing on the client side to ensure that your application is always connected to the broker, while optimizing the usage of the machine's resources with parallel processing.
+
+To create a **consumer**, you just have to:
 
 **1.** Create a class that inherits from `ConsumerBase`
 
@@ -36,9 +38,33 @@ public class MyConsumer : ConsumerBase
 }
 ```
 
+And to **publish** a message:
+
+**1.** Inject the context, and get the publisher:
+
+```csharp
+public class ExampleController : ControllerBase
+{
+    private readonly IPublisher _publisher;
+
+    public ExampleController(ExampleContext busContext)
+    {
+        _publisher = busContext.Publisher;
+    }
+
+    // ...
+}
+```
+
+**2.** Publish a message:
+
+```csharp
+await _publisher.PublishString("exchange1", "key1", "Hello, World!");
+```
+
 ## How
 
-**1.** Create a Context
+### **1. Create a Context**
 
 Think of a context as a unique instance of a client, that listens and/or publishes to a specific RabbitMQ server.
 
@@ -53,7 +79,7 @@ public class ExampleContext : RabbitLightContext
 }
 ```
 
-**2.** On your `Startup` class, add the context configuration:
+### **2. On your `Startup` class, add the context configuration:**
 
 ```csharp
 // ...
@@ -116,7 +142,7 @@ public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
 }
 ```
 
-**3.** Create a consumer:
+### **3. Create a consumer:**
 
 ```csharp
 // ...
@@ -179,9 +205,12 @@ public class Example
 }
 ```
 
-> Tip: instead of using hard-coded strings, you can also use defined constants:\
-> public const string MyExchange = "my-exchange";\
-> [Exchange(Exchanges.MyExchange)]
+#### Tip
+Instead of using hard-coded strings, you can also use defined constants:
+``` csharp
+public const string MyExchange = "my-exchange";
+[Exchange(Exchanges.MyExchange)]
+```
 
 #### Note
 
@@ -213,7 +242,7 @@ public class ConsumerB : ConsumerBase
 
 When a message with the **routingA** routing key is received, there is no guarantee that it will be routed to **ConsumerA** rather than **ConsumerB**, as they share the same destination queue. If there is need to check the routing key from a message, use `context.EventArgs.RoutingKey`.
 
-**4.** Create a publisher:
+### **4. Create a publisher:**
 
 ```csharp
 // ...
@@ -237,19 +266,19 @@ public class ExampleController : ControllerBase
         var body = new Example { Text = "Hello, World!" };
 
         // Publish byte[]
-        _publisher.Publish("exchange1", "key1", new byte[] { });
+        await _publisher.Publish("exchange1", "key1", new byte[] { });
 
         // Publish string
-        _publisher.PublishString("exchange1", "key1", "Hello, World!");
+        await _publisher.PublishString("exchange1", "key1", "Hello, World!");
 
         // Publish Json
-        _publisher.PublishJson("exchange1", "key1", body);
+        await _publisher.PublishJson("exchange1", "key1", body);
 
         // Publish Xml
-        _publisher.PublishXml("exchange1", "key1", body);
+        await _publisher.PublishXml("exchange1", "key1", body);
 
         // Publish Batch (byte[], string, Json and/or Xml)
-        _publisher.PublishBatch(new List<PublishBatch> {
+        await _publisher.PublishBatch(new List<PublishBatch> {
             new PublishBatch("exchange1", "key1", MessageType.String, "Hello, World!"),
             new PublishBatch("exchange2", "key2", MessageType.Json, body),
         });
@@ -257,9 +286,9 @@ public class ExampleController : ControllerBase
         return "Message published!";
     }
 }
-```
+```  
 
-**5.** In `appsettings.json` add the `RabbitLight` property:
+### **5. In `appsettings.json` add the `RabbitLight` property:**
 
 ```json
 {
@@ -293,13 +322,13 @@ public class ExampleController : ControllerBase
 | **PortApi** | Port where RabbitMQ management UI plugin is available. |
 | **MinChannels** | Minimum number of parallel channels. |
 | **MaxChannels** | Maximum number of parallel channels. |
-| **ScallingThreshold** | Number of messages required to scale a new channel (e.g. 500 messages) or null to disable. |
+| **ScallingThreshold** | Number of messages required to scale a new channel (e.g. 500 messages) or null to disable scalling. |
 | **PrefetchCount** | Number of messages that will be cached by each channel at once. |
 | **ChannelsPerConnection** | Number of channels per connection (RabbitMQ's IConnection). |
-| **RequeueDelay** | Delay for when Nacking a message for requeue or null to none. |
-| **MonitoringInterval** | Interval regarding channel monitoring tasks (health check and scalling) |
+| **RequeueDelay** | Delay for when Nacking a message for requeue or null to instantaneous. |
+| **MonitoringInterval** | Interval regarding channel monitoring tasks (health check, auto scalling and self healing) |
 
-### Bonus: Console App
+### **Bonus: Console App**
 
 Using RabbittLight with a simple Console App
 
