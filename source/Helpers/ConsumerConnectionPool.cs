@@ -2,6 +2,7 @@
 using RabbitLight.Config;
 using RabbitLight.Extensions;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,7 +20,7 @@ namespace RabbitLight.Helpers
         // Channel groups
         private readonly Dictionary<IConnection, List<IModel>> _connPool = new Dictionary<IConnection, List<IModel>>(); // connection pool to ensure ratio of channels per connection
         private readonly Dictionary<IModel, int> _channelUsage = new Dictionary<IModel, int>(); // consumer usage counter, used for death row logic
-        private readonly List<IModel> _deathRow = new List<IModel>(); // channels that were in use during removal attempt
+        private readonly HashSet<IModel> _deathRow = new HashSet<IModel>(); // channels that were in use during removal attempt
 
         // Locks (to prevent unsynced management)
         private readonly SemaphoreSlim _connLock = new SemaphoreSlim(1); // ensures thread-safe lists
@@ -115,7 +116,7 @@ namespace RabbitLight.Helpers
 
         public void NotifyConsumerEnd(IModel channel)
         {
-            _deletionLock.WaitOrThrow(TimeSpan.FromSeconds(30), _cts.Token);
+            _deletionLock.Wait(_cts.Token);
 
             try
             {
@@ -222,10 +223,10 @@ namespace RabbitLight.Helpers
 
         // Managers
 
-        private async Task<IConnection> GetOrCreateConnection()
+        private async Task<IConnection> GetOrCreateConnection(bool forceCreation = false)
         {
             IConnection conn;
-            var poolItem = _connPool.FirstOrDefault(x => x.Value.Count() < _connConfig.ChannelsPerConnection);
+            var poolItem = _connPool.LastOrDefault(x => x.Value.Count() < _connConfig.ChannelsPerConnection);
 
             // Prevent returning a closed connection
             if (!IsNull(poolItem) && !poolItem.Key.IsOpen)
@@ -234,7 +235,7 @@ namespace RabbitLight.Helpers
                 poolItem = default;
             }
 
-            if (IsNull(poolItem))
+            if (IsNull(poolItem) || forceCreation)
             {
                 var connFactory = _connConfig.CreateConnectionFactory();
                 conn = await connFactory.CreateConnectionAsync();
@@ -272,8 +273,20 @@ namespace RabbitLight.Helpers
             {
                 _logger?.LogDebug($"[RabbitLight] Creating channel");
 
-                var conn = await GetOrCreateConnection();
-                var channel = await conn.CreateModelAsync();
+                IConnection conn;
+                IModel channel;
+
+                try
+                {
+                    conn = await GetOrCreateConnection();
+                    channel = await conn.CreateModelAsync();
+                }
+                catch (ChannelAllocationException)
+                {
+                    // TODO: workaround, there should be a reason to why the channel count is unsynced
+                    conn = await GetOrCreateConnection(forceCreation: true);
+                    channel = await conn.CreateModelAsync();
+                }
 
                 _connPool[conn].Add(channel);
                 _channelUsage[channel] = 0;
@@ -294,18 +307,25 @@ namespace RabbitLight.Helpers
             conn = conn ?? _connPool.FirstOrDefault(x => x.Value.Contains(channel)).Key;
             if (conn == null)
             {
+                if (channel.IsOpen) await channel.CloseAsync();
+                _channelUsage.Remove(channel);
                 _deathRow.Remove(channel);
+                channel.Dispose();
                 return;
             }
 
-            _deletionLock.WaitOrThrow(TimeSpan.FromSeconds(30), _cts.Token);
+            await _deletionLock.WaitOrThrowAsync(TimeSpan.FromSeconds(30), _cts.Token);
 
             try
             {
-                var canRemove = _channelUsage[channel] == 0;
+                var canRemove = _channelUsage[channel] == 0 || !channel.IsOpen;
                 if (!canRemove)
                 {
-                    _deathRow.Add(channel);
+                    _logger?.LogDebug($"[RabbitLight] Unable to remove channel ({conn.ToString()} -> {channel.ChannelNumber})");
+
+                    if (!_deathRow.Contains(channel))
+                        _deathRow.Add(channel);
+
                     return;
                 }
 

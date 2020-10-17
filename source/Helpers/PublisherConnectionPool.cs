@@ -3,6 +3,7 @@ using RabbitLight.Config;
 using RabbitLight.Extensions;
 using RabbitLight.Extensions;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -129,10 +130,10 @@ namespace RabbitLight.Helpers
 
         // Managers
 
-        private async Task<IConnection> GetOrCreateConnection()
+        private async Task<IConnection> GetOrCreateConnection(bool forceCreation = false)
         {
             IConnection conn;
-            var poolItem = _connPool.FirstOrDefault(x => x.Value.Count() < _connConfig.ChannelsPerConnection);
+            var poolItem = _connPool.LastOrDefault(x => x.Value.Count() < _connConfig.ChannelsPerConnection);
 
             // Prevent returning a closed connection
             if (!IsNull(poolItem) && !poolItem.Key.IsOpen)
@@ -141,7 +142,7 @@ namespace RabbitLight.Helpers
                 poolItem = default;
             }
 
-            if (IsNull(poolItem))
+            if (IsNull(poolItem) || forceCreation)
             {
                 var connFactory = _connConfig.CreateConnectionFactory();
                 conn = await connFactory.CreateConnectionAsync();
@@ -175,8 +176,20 @@ namespace RabbitLight.Helpers
             {
                 _logger?.LogDebug($"[RabbitLight] Creating channel");
 
-                var conn = await GetOrCreateConnection();
-                var channel = await conn.CreateModelAsync();
+                IConnection conn;
+                IModel channel;
+
+                try
+                {
+                    conn = await GetOrCreateConnection();
+                    channel = await conn.CreateModelAsync();
+                }
+                catch (ChannelAllocationException)
+                {
+                    // TODO: workaround, there should be a reason to why the channel count is unsynced
+                    conn = await GetOrCreateConnection(forceCreation: true);
+                    channel = await conn.CreateModelAsync();
+                }
 
                 _connPool[conn].Add(channel);
 
@@ -199,13 +212,12 @@ namespace RabbitLight.Helpers
             if (channel == null) return;
 
             conn = conn ?? _connPool.FirstOrDefault(x => x.Value.Contains(channel)).Key;
-            if (conn == null) return;
 
             _logger?.LogDebug($"[RabbitLight] Removing channel ({channel.ChannelNumber})");
 
             if (channel.IsOpen) await channel.CloseAsync();
             _threadPool.RemoveAll(x => x.Value == channel);
-            _connPool[conn].Remove(channel);
+            if (conn != null) _connPool[conn].Remove(channel);
             channel.Dispose();
         }
 

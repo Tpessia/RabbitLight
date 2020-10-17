@@ -140,21 +140,44 @@ namespace RabbitLight.Consumer.Manager
             var consumerEvent = new AsyncEventingBasicConsumer(channel);
             consumerEvent.Received += async (ch, ea) =>
             {
-                // Will throw exception if channel has been deleted
-                var allowed = _connPool.NotifyConsumerStart(channel);
-                if (!allowed) return;
+                // Check if channel is available
+                try
+                {
+                    ValidateChannel(channel);
+
+                    // Will return false if channel has been deleted
+                    var allowed = _connPool.NotifyConsumerStart(channel);
+                    if (!allowed)
+                    {
+                        Nack(channel, ea.DeliveryTag, requeue: true);
+                        await Task.Yield();
+                        return;
+                    }
+                }
+                catch (Exception)
+                {
+                    Nack(channel, ea.DeliveryTag, requeue: true);
+                    await Task.Yield();
+                    return;
+                }
 
                 // Create New DI Scope
                 using (var scope = _sp.CreateScope())
                 {
                     try
                     {
+                        ValidateChannel(channel);
+
                         // Start Callback
                         if (_config.OnStart != null)
                             await _config.OnStart.Invoke(scope.ServiceProvider, consumer.Type, ea);
 
+                        ValidateChannel(channel);
+
                         // Invoke Consumer
                         await consumer.InvokeConsumer(scope.ServiceProvider, ea);
+
+                        ValidateChannel(channel);
 
                         // End Callback
                         if (_config.OnEnd != null)
@@ -172,7 +195,7 @@ namespace RabbitLight.Consumer.Manager
                         // Error: Discard
 
                         consumer.Logger?.LogWarning(ex, $"[RabbitLight] Message discarded");
-                        Nack(channel, ea.DeliveryTag);
+                        Nack(channel, ea.DeliveryTag, requeue: false);
                     }
                     catch (Exception ex)
                     {
@@ -226,6 +249,8 @@ namespace RabbitLight.Consumer.Manager
             {
                 if (ch.IsOpen) ch.BasicNack(deliveryTag, multiple, requeue);
             };
+
+            bool ValidateChannel(IModel ch) => ch.IsOpen ? true : throw new Exception("[RabbitLight] Channel is unexpectedly closed");
         }
 
         private void StartMonitor()
