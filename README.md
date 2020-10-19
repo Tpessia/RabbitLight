@@ -1,8 +1,8 @@
-[![NuGet Status](https://img.shields.io/nuget/v/RabbitLight?color=003060)](https://www.nuget.org/packages/RabbitLight)
-[![NuGet Status](https://img.shields.io/github/languages/code-size/Tpessia/RabbitLight?label=size&color=003060)](https://www.nuget.org/packages/RabbitLight)
-<!-- [![NuGet Status](https://img.shields.io/nuget/dt/RabbitLight?color=003060)](https://www.nuget.org/packages/RabbitLight) -->
+[![NuGet Status](https://img.shields.io/nuget/v/RabbitLight)](https://www.nuget.org/packages/RabbitLight)
+[![NuGet Status](https://img.shields.io/github/languages/code-size/Tpessia/RabbitLight?label=size)](https://www.nuget.org/packages/RabbitLight)
+[![NuGet Status](https://img.shields.io/nuget/dt/RabbitLight)](https://www.nuget.org/packages/RabbitLight)
 
-*Samples: [RabbitLight.Samples](https://github.com/Tpessia/RabbitLight.Samples)*
+**Sample Projects: [RabbitLight.Samples](https://github.com/Tpessia/RabbitLight.Samples)**
 <br>
 <br>
 
