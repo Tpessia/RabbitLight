@@ -23,19 +23,28 @@ namespace RabbitLight.Publisher
             _connPool = connPool;
         }
 
-        public async Task Publish(string exchange, string routingKey, byte[] body, bool mandatory = false, IBasicProperties basicProperties = null)
+        public async Task<ulong> Publish(string exchange, string routingKey, byte[] body, bool mandatory = false, IBasicProperties basicProperties = null)
         {
             var channel = await _connPool.GetOrCreateChannel();
+
+            if (basicProperties == null)
+            {
+                basicProperties = channel.CreateBasicProperties();
+                basicProperties.DeliveryMode = 2;
+            }
+
+            var seqNumber = channel.NextPublishSeqNo;
             channel.BasicPublish(exchange, routingKey, mandatory, basicProperties, body);
+            return seqNumber;
         }
 
-        public Task PublishString(string exchange, string routingKey, string body, bool mandatory = false, IBasicProperties basicProperties = null) =>
+        public Task<ulong> PublishString(string exchange, string routingKey, string body, bool mandatory = false, IBasicProperties basicProperties = null) =>
             Publish(exchange, routingKey, Encoding.UTF8.GetBytes(body), mandatory, basicProperties);
 
-        public Task PublishJson<T>(string exchange, string routingKey, T body, bool mandatory = false, IBasicProperties basicProperties = null) =>
+        public Task<ulong> PublishJson<T>(string exchange, string routingKey, T body, bool mandatory = false, IBasicProperties basicProperties = null) =>
             PublishString(exchange, routingKey, JsonConvert.SerializeObject(body), mandatory, basicProperties);
 
-        public Task PublishXml<T>(string exchange, string routingKey, T body, bool mandatory = false, IBasicProperties basicProperties = null) =>
+        public Task<ulong> PublishXml<T>(string exchange, string routingKey, T body, bool mandatory = false, IBasicProperties basicProperties = null) =>
             PublishString(exchange, routingKey, XmlSerialize(body), mandatory, basicProperties);
 
         public async Task PublishBatch(IEnumerable<PublishBatch> content)
@@ -45,6 +54,12 @@ namespace RabbitLight.Publisher
 
             foreach (var item in content)
             {
+                if (item.BasicProperties == null)
+                {
+                    item.BasicProperties = channel.CreateBasicProperties();
+                    item.BasicProperties.DeliveryMode = 2;
+                }
+
                 var body = ParseMessage(item.Body, item.MessageType);
                 batch.Add(item.Exchange, item.RoutingKey, item.Mandatory, item.BasicProperties, body);
             }
