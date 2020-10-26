@@ -187,7 +187,7 @@ namespace RabbitLight.Consumer.Manager
                         Ack(channel, ea.DeliveryTag);
 
                         // Ack Callback
-                        if (_config.OnEnd != null)
+                        if (_config.OnAck != null)
                             await _config.OnAck.Invoke(scope.ServiceProvider, consumer.Type, ea);
                     }
                     catch (DiscardMessageException ex)
