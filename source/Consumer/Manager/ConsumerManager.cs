@@ -386,7 +386,7 @@ namespace RabbitLight.Consumer.Manager
         {
             channel.QueueDeclare(queue: queue.Name, durable: true, exclusive: false, autoDelete: false, arguments: null);
 
-            if (exchange.Name != string.Empty)
+            if (!string.IsNullOrWhiteSpace(exchange.Name))
             {
                 channel.ExchangeDeclare(exchange: exchange.Name, type: exchange.ExchangeType, durable: true, autoDelete: false, arguments: null);
 
