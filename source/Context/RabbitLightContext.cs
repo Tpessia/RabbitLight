@@ -28,10 +28,10 @@ namespace RabbitLight.Context
 
             StartMonitor();
 
-            var consumerPool =  new ConsumerConnectionPool(_config.ConnConfig, CreateLogger<ConsumerConnectionPool>());
+            var consumerPool =  new ConsumerConnectionPool(_config, CreateLogger<ConsumerConnectionPool>());
             _consumerManager = new ConsumerManager(sp, consumerPool, _config);
 
-            var publisherPool = new PublisherConnectionPool(_config.ConnConfig, CreateLogger<PublisherConnectionPool>());
+            var publisherPool = new PublisherConnectionPool(_config, sp, CreateLogger<PublisherConnectionPool>());
             Publisher = new Publisher.Publisher(publisherPool);
 
             ILogger<T> CreateLogger<T>() => sp.GetService<ILoggerFactory>()?.CreateLogger<T>();

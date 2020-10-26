@@ -13,7 +13,7 @@ namespace RabbitLight.Helpers
 {
     internal class ConsumerConnectionPool : IConsumerConnectionPool
     {
-        private readonly ConnectionConfig _connConfig;
+        private readonly ContextConfig _config;
         private readonly ILogger _logger;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
 
@@ -29,12 +29,12 @@ namespace RabbitLight.Helpers
         public int TotalChannels => !_connPool.Any() ? 0
             : _connPool.Values.Select(x => x.Count).Aggregate((a, b) => a + b) - _deathRow.Count;
 
-        public ConsumerConnectionPool(ConnectionConfig connConfig, ILogger<ConsumerConnectionPool> logger = null)
+        public ConsumerConnectionPool(ContextConfig config, ILogger<ConsumerConnectionPool> logger = null)
         {
-            if (connConfig == null)
-                throw new ArgumentException("Invalid null value", nameof(connConfig));
+            if (config == null)
+                throw new ArgumentException("Invalid null value", nameof(config));
 
-            _connConfig = connConfig;
+            _config = config;
             _logger = logger;
 
             StartMonitor();
@@ -44,7 +44,7 @@ namespace RabbitLight.Helpers
 
         public async Task<IModel> CreateUnmanagedChannel()
         {
-            var connFactory = _connConfig.CreateConnectionFactory();
+            var connFactory = _config.ConnConfig.CreateConnectionFactory();
             var conn = await connFactory.CreateConnectionAsync();
             return await conn.CreateModelAsync();
         }
@@ -59,7 +59,7 @@ namespace RabbitLight.Helpers
 
                 // Prefetch Size -> https://www.rabbitmq.com/amqp-0-9-1-reference.html#:~:text=long%20prefetch-size
                 // Prefetch Count (global: false) -> applied separately to each new consumer on the channel
-                channel.BasicQos(0, _connConfig.PrefetchCount, false);
+                channel.BasicQos(0, _config.ConnConfig.PrefetchCount, false);
 
                 return channel;
             }
@@ -171,7 +171,7 @@ namespace RabbitLight.Helpers
 
                 _logger?.LogDebug($"[RabbitLight] *** Stop consumer pool monitor ***\r\n");
             },
-            _connConfig.MonitoringInterval, _connConfig.MonitoringInterval, _cts.Token,
+            _config.ConnConfig.MonitoringInterval, _config.ConnConfig.MonitoringInterval, _cts.Token,
             ex => Task.Run(() => _logger?.LogError(ex, "[RabbitLight] Error while disposing connections/channels")));
         }
 
@@ -226,7 +226,7 @@ namespace RabbitLight.Helpers
         private async Task<IConnection> GetOrCreateConnection(bool forceCreation = false)
         {
             IConnection conn;
-            var poolItem = _connPool.LastOrDefault(x => x.Value.Count() < _connConfig.ChannelsPerConnection);
+            var poolItem = _connPool.LastOrDefault(x => x.Value.Count() < _config.ConnConfig.ChannelsPerConnection);
 
             // Prevent returning a closed connection
             if (!IsNull(poolItem) && !poolItem.Key.IsOpen)
@@ -237,7 +237,7 @@ namespace RabbitLight.Helpers
 
             if (IsNull(poolItem) || forceCreation)
             {
-                var connFactory = _connConfig.CreateConnectionFactory();
+                var connFactory = _config.ConnConfig.CreateConnectionFactory();
                 conn = await connFactory.CreateConnectionAsync();
                 _connPool[conn] = new List<IModel>();
             }

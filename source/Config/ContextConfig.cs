@@ -34,6 +34,10 @@ namespace RabbitLight.Config
         /// Callback called after a consumer throws an unhandled exception
         /// </summary>
         public Func<IServiceProvider, Exception, Type, BasicDeliverEventArgs, Task<bool>> OnError { get; set; }
+        /// <summary>
+        /// Callback called after a publisher receives a NACK from the server
+        /// </summary>
+        public Action<IServiceProvider, BasicNackEventArgs> OnPublisherNack { get; set; }
 
         public void Validate()
         {
