@@ -13,9 +13,10 @@ namespace RabbitLight.Helpers
 {
     internal class PublisherConnectionPool : IPublisherConnectionPool
     {
-        private readonly ConnectionConfig _connConfig;
+        private readonly ContextConfig _config;
         private readonly ILogger _logger;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
+        private readonly IServiceProvider sp;
 
         // Channel groups
         private readonly Dictionary<IConnection, List<IModel>> _connPool = new Dictionary<IConnection, List<IModel>>(); // connection pool to ensure ratio of channels per connection
@@ -24,12 +25,12 @@ namespace RabbitLight.Helpers
         // Locks
         private readonly SemaphoreSlim _connLock = new SemaphoreSlim(1); // ensures thread-safe lists
 
-        public PublisherConnectionPool(ConnectionConfig connConfig, ILogger<PublisherConnectionPool> logger = null)
+        public PublisherConnectionPool(ContextConfig config, IServiceProvider sp, ILogger<PublisherConnectionPool> logger = null)
         {
-            if (connConfig == null)
-                throw new ArgumentException("Invalid null value", nameof(connConfig));
+            if (config == null)
+                throw new ArgumentException("Invalid null value", nameof(config));
 
-            _connConfig = connConfig;
+            _config = config;
             _logger = logger;
 
             StartMonitor();
@@ -96,7 +97,7 @@ namespace RabbitLight.Helpers
 
                 _logger?.LogDebug($"*** [RabbitLight] Stop publisher pool monitor ***\r\n");
             },
-            _connConfig.MonitoringInterval, _connConfig.MonitoringInterval, _cts.Token,
+            _config.ConnConfig.MonitoringInterval, _config.ConnConfig.MonitoringInterval, _cts.Token,
             ex => Task.Run(() => _logger?.LogError(ex, "[RabbitLight] Error while disposing connections/channels")));
         }
 
@@ -132,7 +133,7 @@ namespace RabbitLight.Helpers
         private async Task<IConnection> GetOrCreateConnection(bool forceCreation = false)
         {
             IConnection conn;
-            var poolItem = _connPool.LastOrDefault(x => x.Value.Count() < _connConfig.ChannelsPerConnection);
+            var poolItem = _connPool.LastOrDefault(x => x.Value.Count() < _config.ConnConfig.ChannelsPerConnection);
 
             // Prevent returning a closed connection
             if (!IsNull(poolItem) && !poolItem.Key.IsOpen)
@@ -143,7 +144,7 @@ namespace RabbitLight.Helpers
 
             if (IsNull(poolItem) || forceCreation)
             {
-                var connFactory = _connConfig.CreateConnectionFactory();
+                var connFactory = _config.ConnConfig.CreateConnectionFactory();
                 conn = await connFactory.CreateConnectionAsync();
                 _connPool[conn] = new List<IModel>();
             }
@@ -189,6 +190,12 @@ namespace RabbitLight.Helpers
                     conn = await GetOrCreateConnection(forceCreation: true);
                     channel = await conn.CreateModelAsync();
                 }
+
+                channel.ConfirmSelect();
+                channel.BasicNacks += (sender, ea) =>
+                {
+                    _config.OnPublisherNack(sp, ea);
+                };
 
                 _connPool[conn].Add(channel);
 
