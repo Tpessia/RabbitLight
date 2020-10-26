@@ -127,7 +127,7 @@ namespace RabbitLight.Consumer.Manager
                 var overMax = _connPool.TotalChannels >= _config.ConnConfig.MaxChannels;
                 if (overMax) break;
 
-                _logger?.LogDebug($"[RabbitLight] Creating listeners ({i+1}/{channelCount})");
+                _logger?.LogDebug($"[RabbitLight] Creating listeners ({i + 1}/{channelCount})");
 
                 var channel = await _connPool.CreateNewChannel();
                 foreach (var consumer in _consumers)
@@ -384,11 +384,15 @@ namespace RabbitLight.Consumer.Manager
 
         private void DeclareQueue(IModel channel, ExchangeAttribute exchange, QueueAttribute queue)
         {
-            channel.ExchangeDeclare(exchange: exchange.Name, type: exchange.ExchangeType, durable: true, autoDelete: false, arguments: null);
             channel.QueueDeclare(queue: queue.Name, durable: true, exclusive: false, autoDelete: false, arguments: null);
 
-            foreach (var routingKey in queue.RoutingKeys)
-                channel.QueueBind(queue: queue.Name, exchange: exchange.Name, routingKey: routingKey, arguments: null);
+            if (exchange.Name != string.Empty)
+            {
+                channel.ExchangeDeclare(exchange: exchange.Name, type: exchange.ExchangeType, durable: true, autoDelete: false, arguments: null);
+
+                foreach (var routingKey in queue.RoutingKeys)
+                    channel.QueueBind(queue: queue.Name, exchange: exchange.Name, routingKey: routingKey, arguments: null);
+            }
         }
 
         #endregion
