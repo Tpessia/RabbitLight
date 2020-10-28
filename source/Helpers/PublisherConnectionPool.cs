@@ -16,7 +16,7 @@ namespace RabbitLight.Helpers
         private readonly ContextConfig _config;
         private readonly ILogger _logger;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
-        private readonly IServiceProvider sp;
+        private readonly IServiceProvider _sp;
 
         // Channel groups
         private readonly Dictionary<IConnection, List<IModel>> _connPool = new Dictionary<IConnection, List<IModel>>(); // connection pool to ensure ratio of channels per connection
@@ -31,6 +31,7 @@ namespace RabbitLight.Helpers
                 throw new ArgumentException("Invalid null value", nameof(config));
 
             _config = config;
+            _sp = sp;
             _logger = logger;
 
             StartMonitor();
@@ -194,7 +195,7 @@ namespace RabbitLight.Helpers
                 channel.ConfirmSelect();
                 channel.BasicNacks += (sender, ea) =>
                 {
-                    _config.OnPublisherNack(sp, ea);
+                    _config.OnPublisherNack(_sp, ea);
                 };
 
                 _connPool[conn].Add(channel);
