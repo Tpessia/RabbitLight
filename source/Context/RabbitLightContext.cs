@@ -26,8 +26,6 @@ namespace RabbitLight.Context
             _config.Validate();
             _logger = CreateLogger<RabbitLightContext>();
 
-            StartMonitor();
-
             var consumerPool =  new ConsumerConnectionPool(_config, CreateLogger<ConsumerConnectionPool>());
             _consumerManager = new ConsumerManager(sp, consumerPool, _config);
 
@@ -37,23 +35,37 @@ namespace RabbitLight.Context
             ILogger<T> CreateLogger<T>() => sp.GetService<ILoggerFactory>()?.CreateLogger<T>();
         }
 
-        public void StartMonitor()
-        {
-            Helpers.Monitor.Run(() => RabbitHttpClient.CreateVHostAndConfigs(_config.ConnConfig),
-                _config.ConnConfig.MonitoringInterval, _config.ConnConfig.MonitoringInterval, _cts.Token,
-                ex => Task.Run(() => _logger?.LogError(ex, "[RabbitLight] Error while ensuring VHost and configs")));
-        }
-
         public async Task Register()
         {
             if (!_registered)
             {
-                await RabbitHttpClient.CreateVHostAndConfigs(_config.ConnConfig);
+                try
+                {
+                    if (!_config.ConnConfig.SkipVHostConfig)
+                        await RabbitHttpClient.CreateVHostAndConfigs(_config.ConnConfig);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "[RabbitLight] Unable to create VHost");
+                }
+
+                StartMonitor();
+
                 await _consumerManager.Register();
                 _registered = true;
             }
         }
 
         public void Dispose() => _consumerManager.Dispose();
+
+        private void StartMonitor()
+        {
+            Helpers.Monitor.Run(async () => {
+                if (!_config.ConnConfig.SkipVHostConfig)
+                    await RabbitHttpClient.CreateVHostAndConfigs(_config.ConnConfig);
+            },
+            _config.ConnConfig.MonitoringInterval, _config.ConnConfig.MonitoringInterval, _cts.Token,
+            ex => Task.Run(() => _logger?.LogError(ex, "[RabbitLight] Error while ensuring VHost and configs")));
+        }
     }
 }

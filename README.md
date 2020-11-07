@@ -304,8 +304,10 @@ public class ExampleController : ControllerBase
     "ScallingThreshold": 500,
     "PrefetchCount": 10,
     "ChannelsPerConnection": 20,
-    "RequeueDelay": "00:00:05",
-    "MonitoringInterval": "00:01:00"
+    "RequeueDelay": "00:00:30",
+    "MonitoringInterval": "00:01:00",
+    "SkipVHostConfig": false,
+    "SkipDeclarations": false
   }
 }
 ```
@@ -327,6 +329,8 @@ public class ExampleController : ControllerBase
 | **ChannelsPerConnection** | Number of channels per connection (RabbitMQ's IConnection). |
 | **RequeueDelay** | Delay for when Nacking a message for requeue or null to instantaneous. |
 | **MonitoringInterval** | Interval regarding channel monitoring tasks (health check, auto scalling and self healing) |
+| **SkipVHostConfig** | Skip VHost creation and other configs |
+| **SkipDeclarations** | Skip queue and exchange declaration and bind |
 
 ### **Bonus: Console App**
 
