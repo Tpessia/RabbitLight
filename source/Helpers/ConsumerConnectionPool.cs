@@ -51,7 +51,7 @@ namespace RabbitLight.Helpers
 
         public async Task<IModel> CreateNewChannel()
         {
-            _connLock.WaitOrThrow(TimeSpan.FromSeconds(30), _cts.Token);
+            await _connLock.WaitOrThrowAsync(TimeSpan.FromSeconds(30), _cts.Token);
 
             try
             {
@@ -71,7 +71,7 @@ namespace RabbitLight.Helpers
 
         public async Task DeleteChannels(int count)
         {
-            _connLock.WaitOrThrow(TimeSpan.FromSeconds(30), _cts.Token);
+            await _connLock.WaitOrThrowAsync(TimeSpan.FromSeconds(30), _cts.Token);
 
             try
             {
@@ -138,14 +138,28 @@ namespace RabbitLight.Helpers
             {
                 foreach (var ch in poolItem.Value)
                 {
-                    _deathRow.Add(ch);
-                    ch.Close();
-                    ch.Dispose();
+                    try
+                    {
+                        _deathRow.Add(ch);
+                        ch.Close();
+                        ch.Dispose();
+                    }
+                    catch
+                    {
+                        continue;
+                    }
                 }
 
-                var conn = poolItem.Key;
-                conn.Close();
-                conn.Dispose();
+                try
+                {
+                    var conn = poolItem.Key;
+                    conn.Close();
+                    conn.Dispose();
+                }
+                catch
+                {
+                    continue;
+                }
             }
         }
 
@@ -177,7 +191,7 @@ namespace RabbitLight.Helpers
 
         private async Task DisposeClosedChannels()
         {
-            _connLock.WaitOrThrow(TimeSpan.FromSeconds(30), _cts.Token);
+            await _connLock.WaitOrThrowAsync(TimeSpan.FromSeconds(30), _cts.Token);
 
             try
             {
@@ -204,7 +218,7 @@ namespace RabbitLight.Helpers
 
         private async Task DisposeDeathRow()
         {
-            _connLock.WaitOrThrow(TimeSpan.FromSeconds(30), _cts.Token);
+            await _connLock.WaitOrThrowAsync(TimeSpan.FromSeconds(30), _cts.Token);
 
             try
             {

@@ -41,7 +41,7 @@ namespace RabbitLight.Helpers
 
         public async Task<IModel> GetOrCreateChannel()
         {
-            _connLock.WaitOrThrow(TimeSpan.FromSeconds(30), _cts.Token);
+            await _connLock.WaitOrThrowAsync(TimeSpan.FromSeconds(30), _cts.Token);
 
             var threadId = Thread.CurrentThread.ManagedThreadId;
 
@@ -67,13 +67,27 @@ namespace RabbitLight.Helpers
             {
                 foreach (var ch in poolItem.Value)
                 {
-                    ch.Close();
-                    ch.Dispose();
+                    try
+                    {
+                        ch.Close();
+                        ch.Dispose();
+                    }
+                    catch
+                    {
+                        continue;
+                    }
                 }
 
-                var conn = poolItem.Key;
-                conn.Close();
-                conn.Dispose();
+                try
+                {
+                    var conn = poolItem.Key;
+                    conn.Close();
+                    conn.Dispose();
+                }
+                catch
+                {
+                    continue;
+                }
             }
         }
 
@@ -104,7 +118,7 @@ namespace RabbitLight.Helpers
 
         private async Task DisposeClosedChannels()
         {
-            _connLock.WaitOrThrow(TimeSpan.FromSeconds(30), _cts.Token);
+            await _connLock.WaitOrThrowAsync(TimeSpan.FromSeconds(30), _cts.Token);
 
             try
             {
