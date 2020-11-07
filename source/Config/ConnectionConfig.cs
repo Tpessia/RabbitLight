@@ -64,14 +64,22 @@ namespace RabbitLight.Config
         /// Interval regarding channel monitoring tasks (health check and scalling)
         /// </summary>
         public TimeSpan MonitoringInterval { get; set; } = TimeSpan.FromSeconds(60);
+        /// <summary>
+        /// Skip VHost creation and other configs
+        /// </summary>
+        public bool SkipVHostConfig { get; set; } = false;
+        /// <summary>
+        /// Skip queue and exchange declaration and bind
+        /// </summary>
+        public bool SkipDeclarations { get; set; } = false;
 
         private ConnectionConfig()
         {
         }
 
-        public ConnectionConfig(string userName, string password, string vhost, string hostname, ushort port, ushort portApi, ushort? minChannels = null, ushort? maxChannels = null,
-            ushort? scallingThreshold = null, ushort? prefetchCount = null, ushort? channelsPerConnection = null,
-            TimeSpan? requeueDelay = null, TimeSpan? monitoringInterval = null, TimeSpan? publisherChannelTimeout = null)
+        public ConnectionConfig(string userName, string password, string vhost, string hostname, ushort port, ushort portApi, ushort? minChannels = null,
+            ushort? maxChannels = null, ushort? scallingThreshold = null, ushort? prefetchCount = null, ushort? channelsPerConnection = null,
+            TimeSpan? requeueDelay = null, TimeSpan? monitoringInterval = null, bool? skipVHostConfig = null, bool? skipDeclarations = null)
         {
             UserName = userName;
             Password = password;
@@ -87,6 +95,8 @@ namespace RabbitLight.Config
             ChannelsPerConnection = channelsPerConnection ?? ChannelsPerConnection;
             RequeueDelay = requeueDelay;
             MonitoringInterval = monitoringInterval ?? MonitoringInterval;
+            SkipVHostConfig = skipVHostConfig ?? SkipVHostConfig;
+            SkipDeclarations = skipDeclarations ?? SkipDeclarations;
 
             Validate(this);
         }

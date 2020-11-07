@@ -57,11 +57,18 @@ namespace RabbitLight.Consumer.Manager
             _logger?.LogInformation($"[RabbitLight] Registering consumers");
 
             RegisterConsumers();
-            await RegisterListeners(_config.ConnConfig.MinChannels);
+
+            try
+            {
+                await RegisterListeners(_config.ConnConfig.MinChannels);
+                _logger?.LogInformation($"[RabbitLight] Successfully registered all consumers");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[RabbitLight] Unable to register the consumers");
+            }
 
             StartMonitor();
-
-            _logger?.LogInformation($"[RabbitLight] Successfully registered all consumers");
         }
 
         public void Dispose()
@@ -94,7 +101,7 @@ namespace RabbitLight.Consumer.Manager
                     if (!queuesMetadata.HasValue) continue;
                     var (queues, consumerParamType) = queuesMetadata.Value;
 
-                    // Declare Queues
+                    // Register Consumers
                     foreach (var exchange in exchanges)
                     {
                         foreach (var queue in queues)
@@ -116,10 +123,13 @@ namespace RabbitLight.Consumer.Manager
 
         private async Task RegisterListeners(int channelCount)
         {
-            using (var channel = await _connPool.CreateUnmanagedChannel())
+            if (!_config.ConnConfig.SkipDeclarations)
             {
-                foreach (var consumer in _consumers)
-                    DeclareQueue(channel, consumer.Exchange, consumer.Queue);
+                using (var channel = await _connPool.CreateUnmanagedChannel())
+                {
+                    foreach (var consumer in _consumers)
+                        DeclareQueue(channel, consumer.Exchange, consumer.Queue);
+                }
             }
 
             for (int i = 0; i < channelCount; i++)
@@ -277,7 +287,10 @@ namespace RabbitLight.Consumer.Manager
 
                     expected += (int)Math.Ceiling((double)messageCount / _config.ConnConfig.ScallingThreshold.Value);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "[RabbitLight] Unable to scale the consumers");
+                }
             }
 
             _logger?.LogDebug($"[RabbitLight] Expected channels: {expected}");
