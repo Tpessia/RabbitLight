@@ -1,4 +1,5 @@
 ﻿using RabbitMQ.Client;
+using System;
 
 namespace RabbitLight.Publisher
 {
@@ -27,16 +28,16 @@ namespace RabbitLight.Publisher
         /// <summary>
         /// Common AMQP Basic content-class headers interface
         /// </summary>
-        public IBasicProperties BasicProperties { get; set; }
+        public Action<IBasicProperties> SetBasicProperties { get; set; }
 
-        public PublishBatch(string exchange, string routingKey, MessageType messageType, object body, bool mandatory = false, IBasicProperties basicProperties = null)
+        public PublishBatch(string exchange, string routingKey, MessageType messageType, object body, bool mandatory = false, Action<IBasicProperties> setBasicProperties = null)
         {
             MessageType = messageType;
             Exchange = exchange;
             RoutingKey = routingKey;
             Body = body;
             Mandatory = mandatory;
-            BasicProperties = basicProperties;
+            SetBasicProperties = setBasicProperties;
         }
     }
 }

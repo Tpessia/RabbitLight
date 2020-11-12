@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using RabbitLight.Exceptions;
+using RabbitLight.Helpers;
 using RabbitMQ.Client.Events;
 using System;
 using System.IO;
@@ -12,20 +13,61 @@ namespace RabbitLight.Consumer
     {
         public BasicDeliverEventArgs EventArgs { get; set; }
 
-        public byte[] MessageAsBytes() => EventArgs.Body.ToArray();
-
-        public string MessageAsString() => Encoding.UTF8.GetString(MessageAsBytes());
-
         public MessageContext(BasicDeliverEventArgs eventArgs)
         {
             EventArgs = eventArgs;
         }
 
-        public T MessageFromJson()
+        public bool IsBytes() => EventArgs.IsBytes();
+        public bool IsString() => EventArgs.IsString();
+        public bool IsJson() => EventArgs.IsJson();
+        public bool IsXml() => EventArgs.IsXml();
+
+        public byte[] MessageBytes() => EventArgs.MessageBytes();
+        public string MessageString() => EventArgs.MessageString();
+        public T MessageJson() => EventArgs.MessageJson<T>();
+        public T MessageXml() => EventArgs.MessageXml<T>();
+
+        /// <summary>
+        /// Automatically chooses a parser based on the Content Type Header
+        /// </summary>
+        public T Message() => EventArgs.Message<T>();
+    }
+
+    public static class MessageContextExtensions
+    {
+        public static bool IsBytes(this BasicDeliverEventArgs ea) =>
+            ea.BasicProperties.ContentType == "application/octet-stream";
+
+        public static bool IsString(this BasicDeliverEventArgs ea) =>
+            ea.BasicProperties.ContentType == "text/plain";
+
+        public static bool IsJson(this BasicDeliverEventArgs ea) =>
+            ea.BasicProperties.ContentType == "application/json";
+
+        public static bool IsXml(this BasicDeliverEventArgs ea) =>
+            ea.BasicProperties.ContentType == "application/xml";
+
+        public static byte[] MessageBytes(this BasicDeliverEventArgs ea)
+        {
+            byte[] msg = new byte[0];
+            RabbitClientNormalizer.NormalizeEventArgs(
+                () => msg = (dynamic)ea.Body,
+                () => msg = ((dynamic)ea.Body).ToArray()
+            );
+            return msg;
+        }
+
+        public static string MessageString(this BasicDeliverEventArgs ea)
+        {
+            return Encoding.UTF8.GetString(ea.MessageBytes());
+        }
+
+        public static T MessageJson<T>(this BasicDeliverEventArgs ea)
         {
             try
             {
-                return JsonConvert.DeserializeObject<T>(MessageAsString());
+                return JsonConvert.DeserializeObject<T>(ea.MessageString());
             }
             catch (Exception ex)
             {
@@ -33,11 +75,11 @@ namespace RabbitLight.Consumer
             }
         }
 
-        public T MessageFromXml()
+        public static T MessageXml<T>(this BasicDeliverEventArgs ea)
         {
             try
             {
-                using (TextReader reader = new StringReader(MessageAsString()))
+                using (TextReader reader = new StringReader(ea.MessageString()))
                 {
                     var serializer = new XmlSerializer(typeof(T));
                     return (T)serializer.Deserialize(reader);
@@ -47,6 +89,23 @@ namespace RabbitLight.Consumer
             {
                 throw new SerializationException("Error while deserializing consumer message to XML", ex);
             }
+        }
+
+        /// <summary>
+        /// Automatically chooses a parser based on the Content Type Header
+        /// </summary>
+        public static T Message<T>(this BasicDeliverEventArgs ea)
+        {
+            if (ea.IsBytes() && typeof(byte[]).IsAssignableFrom(typeof(T)))
+                return (dynamic)ea.MessageBytes();
+            else if (ea.IsString() && typeof(string).IsAssignableFrom(typeof(T)))
+                return (dynamic)ea.MessageString();
+            else if (ea.IsJson())
+                return ea.MessageJson<T>();
+            else if (ea.IsXml())
+                return ea.MessageXml<T>();
+            else
+                throw new InvalidOperationException($"[RabbitLight] Unable to automatically parse the message, try using a specific parser (MessageContext.{nameof(MessageBytes)}, MessageContext.{nameof(MessageString)}, MessageContext.{nameof(MessageJson)}, MessageContext.{nameof(MessageXml)})");
         }
     }
 }

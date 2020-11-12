@@ -211,8 +211,17 @@ namespace RabbitLight.Consumer.Manager
                     {
                         // Error: Requeue or Discard
 
-                        var requeue = _config.OnError == null ? true
-                            : await _config.OnError.Invoke(scope.ServiceProvider, ex, consumer.Type, ea);
+                        bool requeue;
+                        try
+                        {
+                            requeue = _config.OnError == null ? true
+                                : await _config.OnError.Invoke(scope.ServiceProvider, ex, consumer.Type, ea);
+                        }
+                        catch (Exception callbackEx)
+                        {
+                            ex = callbackEx;
+                            requeue = true;
+                        }
 
                         if (requeue)
                         {

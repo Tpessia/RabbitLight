@@ -101,22 +101,22 @@ public void ConfigureServices(IServiceCollection services)
         // Optional callback called before a consumer is invoked
         config.OnStart = (sp, type, ea) => Task.Run(() =>
         {
-            var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
-            logger?.LogInformation($"\r\nSTARTING {type.Name}: {ea.DeliveryTag}\r\n");
+           var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
+           logger?.LogInformation($"Starting {type.Name}: {ea.DeliveryTag}");
         });
 
         // Optional callback called after a consumer is successfully invoked
         config.OnEnd = (sp, type, ea) => Task.Run(() =>
         {
             var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
-            logger?.LogInformation($"\r\nENDING {type.Name}: {ea.DeliveryTag}\r\n");
+            logger?.LogInformation($"Ending {type.Name}: {ea.DeliveryTag}");
         });
 
         // Optional callback called after the ACK message is sent
         config.OnAck = (sp, type, ea) => Task.Run(() =>
         {
             var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
-            logger?.LogInformation($"\r\nACKED {type.Name}: {ea.DeliveryTag}\r\n");
+            logger?.LogInformation($"Acked {type.Name}: {ea.DeliveryTag}");
         });
 
         // Optional global error handler, whose return identifies the requeue strategy
@@ -126,6 +126,13 @@ public void ConfigureServices(IServiceCollection services)
             logger?.LogError($"Handled error in {type.Name}: {ea.DeliveryTag}");
             var requeue = !(ex is SerializationException);
             return requeue;
+        });
+
+        // Optional callback called after a publisher receives a NACK from the server
+        config.OnPublisherNack = (sp, sender, ea) => Task.Run(() =>
+        {
+            var logger = sp.GetService<ILoggerFactory>()?.CreateLogger<IPublisher>();
+            logger?.LogError($"Publisher error: {ea.DeliveryTag}");
         });
     });
 
@@ -175,10 +182,13 @@ public class ExampleConsumer : ConsumerBase
         // exchange2   ->      key20      -> queue2
 
         // Get the message
-        // var msg = context.MessageAsBytes;
-        // var msg = context.MessageAsString;
-        // var msg = context.MessageFromXml();
-        // var msg = context.MessageFromJson();
+        // var msg = context.MessageBytes();
+        // var msg = context.MessageString();
+        // var msg = context.MessageXml();
+        // var msg = context.MessageJson();
+
+        // Automatically chooses a parser based on the Content Type Header
+        // var msg = context.Message();
 
         // Your code here...
     }
@@ -193,7 +203,7 @@ public class ExampleConsumer : ConsumerBase
 
         // You may discard a message with DiscardMessageException
         // Any other exception will result in requeue
-        var msg = context.MessageFromJson();
+        var msg = context.Message();
         if (msg == null)
             throw new DiscardMessageException("Invalid message");
     }

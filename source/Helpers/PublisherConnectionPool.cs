@@ -209,7 +209,7 @@ namespace RabbitLight.Helpers
                 channel.ConfirmSelect();
                 channel.BasicNacks += (sender, ea) =>
                 {
-                    _config.OnPublisherNack(_sp, ea);
+                    _config.OnPublisherNack(_sp, sender, ea);
                 };
 
                 _connPool[conn].Add(channel);

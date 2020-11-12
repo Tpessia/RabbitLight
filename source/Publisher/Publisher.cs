@@ -23,29 +23,31 @@ namespace RabbitLight.Publisher
             _connPool = connPool;
         }
 
-        public async Task<ulong> Publish(string exchange, string routingKey, byte[] body, bool mandatory = false, IBasicProperties basicProperties = null)
+        public async Task<ulong> Publish(string exchange, string routingKey, byte[] body, bool mandatory = false, Action<IBasicProperties> setBasicProperties = null)
         {
             var channel = await _connPool.GetOrCreateChannel();
 
-            if (basicProperties == null)
-            {
-                basicProperties = channel.CreateBasicProperties();
-                basicProperties.DeliveryMode = 2;
-            }
+            var basicProperties = channel.CreateBasicProperties();
+            basicProperties.DeliveryMode = 2;
+            basicProperties.ContentType = GetContentType(MessageType.Byte);
+            setBasicProperties?.Invoke(basicProperties);
 
             var seqNumber = channel.NextPublishSeqNo;
             channel.BasicPublish(exchange, routingKey, mandatory, basicProperties, body);
             return seqNumber;
         }
 
-        public Task<ulong> PublishString(string exchange, string routingKey, string body, bool mandatory = false, IBasicProperties basicProperties = null) =>
-            Publish(exchange, routingKey, Encoding.UTF8.GetBytes(body), mandatory, basicProperties);
+        public Task<ulong> PublishString(string exchange, string routingKey, string body, bool mandatory = false, Action<IBasicProperties> setBasicProperties = null) =>
+            Publish(exchange, routingKey, ParseMessage(body, MessageType.String), mandatory,
+                props => { props.ContentType = GetContentType(MessageType.String); setBasicProperties?.Invoke(props); });
 
-        public Task<ulong> PublishJson<T>(string exchange, string routingKey, T body, bool mandatory = false, IBasicProperties basicProperties = null) =>
-            PublishString(exchange, routingKey, JsonConvert.SerializeObject(body), mandatory, basicProperties);
+        public Task<ulong> PublishJson<T>(string exchange, string routingKey, T body, bool mandatory = false, Action<IBasicProperties> setBasicProperties = null) =>
+            Publish(exchange, routingKey, ParseMessage(body, MessageType.Json), mandatory,
+                props => { props.ContentType = GetContentType(MessageType.Json); setBasicProperties?.Invoke(props); });
 
-        public Task<ulong> PublishXml<T>(string exchange, string routingKey, T body, bool mandatory = false, IBasicProperties basicProperties = null) =>
-            PublishString(exchange, routingKey, XmlSerialize(body), mandatory, basicProperties);
+        public Task<ulong> PublishXml<T>(string exchange, string routingKey, T body, bool mandatory = false, Action<IBasicProperties> setBasicProperties = null) =>
+            Publish(exchange, routingKey, ParseMessage(body, MessageType.Xml), mandatory,
+                props => { props.ContentType = GetContentType(MessageType.Xml); setBasicProperties?.Invoke(props); });
 
         public async Task PublishBatch(IEnumerable<PublishBatch> content)
         {
@@ -54,14 +56,19 @@ namespace RabbitLight.Publisher
 
             foreach (var item in content)
             {
-                if (item.BasicProperties == null)
-                {
-                    item.BasicProperties = channel.CreateBasicProperties();
-                    item.BasicProperties.DeliveryMode = 2;
-                }
+                var basicProperties = channel.CreateBasicProperties();
+                basicProperties.DeliveryMode = 2;
+                basicProperties.ContentType = GetContentType(item.MessageType);
+                item.SetBasicProperties(basicProperties);
 
                 var body = ParseMessage(item.Body, item.MessageType);
-                batch.Add(item.Exchange, item.RoutingKey, item.Mandatory, item.BasicProperties, body);
+
+#pragma warning disable CS0618
+                RabbitClientNormalizer.NormalizePublisherBatch(
+                    () => batch.Add(item.Exchange, item.RoutingKey, item.Mandatory, basicProperties, (dynamic)body),
+                    () => batch.Add(item.Exchange, item.RoutingKey, item.Mandatory, basicProperties, (dynamic)new ReadOnlyMemory<byte>(body))
+                );
+#pragma warning restore CS0618
             }
 
             batch.Publish();
@@ -87,7 +94,19 @@ namespace RabbitLight.Publisher
             public override Encoding Encoding => Encoding.UTF8;
         }
 
-        private ReadOnlyMemory<byte> ParseMessage(object message, MessageType type)
+        private string GetContentType(MessageType type)
+        {
+            var map = new Dictionary<MessageType, string>
+            {
+                { MessageType.Byte, "application/octet-stream" },
+                { MessageType.String, "text/plain" },
+                { MessageType.Json, "application/json" },
+                { MessageType.Xml, "application/xml" }
+            };
+            return map[type];
+        }
+
+        private byte[] ParseMessage(object message, MessageType type)
         {
             switch (type)
             {
@@ -102,7 +121,7 @@ namespace RabbitLight.Publisher
                 case MessageType.Xml:
                     return Encoding.UTF8.GetBytes(XmlSerialize(message));
                 default:
-                    throw new ArgumentException($"Invalid message type {type.ToString()}");
+                    throw new ArgumentException($"Invalid message type \"{type.ToString()}\"");
             }
         }
     }

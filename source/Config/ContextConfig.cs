@@ -37,7 +37,7 @@ namespace RabbitLight.Config
         /// <summary>
         /// Callback called after a publisher receives a NACK from the server
         /// </summary>
-        public Action<IServiceProvider, BasicNackEventArgs> OnPublisherNack { get; set; }
+        public Action<IServiceProvider, object, BasicNackEventArgs> OnPublisherNack { get; set; }
 
         public void Validate()
         {
