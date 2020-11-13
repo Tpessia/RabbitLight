@@ -59,7 +59,7 @@ public class ExampleController : ControllerBase
 **2.** Publish a message:
 
 ```csharp
-await _publisher.PublishString("exchange1", "key1", "Hello, World!");
+await _publisher.PublishString("my-exchange", "routing-key", "Hello, World!");
 ```
 
 ## How
@@ -157,8 +157,7 @@ using RabbitLight.Consumer;
 using RabbitLight.Exceptions;
 // ...
 
-[Exchange("exchange1")]
-[Exchange("exchange2", ExchangeType.Fanout)] // can be of any ExchangeType accepted by RabbitMQ
+[Exchange("exchange", ExchangeType.Topic)] // ExchangeTypes accepted by RabbitMQ (Direct, Fanout, Headers, Topic)
 public class ExampleConsumer : ConsumerBase
 {
     private readonly ILogger<ExampleConsumer> _logger;
@@ -169,17 +168,11 @@ public class ExampleConsumer : ConsumerBase
     }
 
     [Queue("queue1")] // routing key defaults to "*"
-    [Queue("queue2", "key2", "key20")]
     public async Task Example(MessageContext<ExampleMessage> context)
     {
         // Routes:
-        // EXCHANGE         ROUTING KEY      QUEUE
-        // exchange1   ->       *         -> queue1
-        // exchange2   ->       *         -> queue1
-        // exchange1   ->      key2       -> queue2
-        // exchange2   ->      key2       -> queue2
-        // exchange1   ->      key20      -> queue2
-        // exchange2   ->      key20      -> queue2
+        // EXCHANGE      ROUTING KEY      QUEUE
+        // exchange  ->       *       ->  queue1
 
         // Get the message
         // var msg = context.MessageBytes();
@@ -188,18 +181,20 @@ public class ExampleConsumer : ConsumerBase
         // var msg = context.MessageJson();
 
         // Automatically chooses a parser based on the Content Type Header
-        // var msg = context.Message();
+        var msg = context.Message();
 
         // Your code here...
     }
 
-    [Queue("queue3", "key3")]
+    [Queue("queue2", "key2")]
+    [Queue("queue3", "key3", "key30")]
     public void ExampleDiscard(MessageContext<ExampleMessage> context)
     {
         // Routes:
-        // EXCHANGE         ROUTING KEY      QUEUE
-        // exchange1   ->      key3       -> queue3
-        // exchange2   ->      key3       -> queue3
+        // EXCHANGE      ROUTING KEY      QUEUE
+        // exchange  ->     key2      ->  queue2
+        // exchange  ->     key3      ->  queue3
+        // exchange  ->     key30     ->  queue3
 
         // You may discard a message with DiscardMessageException
         // Any other exception will result in requeue
@@ -209,7 +204,7 @@ public class ExampleConsumer : ConsumerBase
     }
 }
 
-public class Example
+public class ExampleMessage
 {
     public string Text { get; set; }
 }
@@ -276,21 +271,21 @@ public class ExampleController : ControllerBase
         var body = new Example { Text = "Hello, World!" };
 
         // Publish byte[]
-        await _publisher.Publish("exchange1", "key1", new byte[] { });
+        await _publisher.Publish("exchange", "key1", new byte[] { });
 
         // Publish string
-        await _publisher.PublishString("exchange1", "key1", "Hello, World!");
+        await _publisher.PublishString("exchange", "key1", "Hello, World!");
 
         // Publish Json
-        await _publisher.PublishJson("exchange1", "key1", body);
+        await _publisher.PublishJson("exchange", "key1", body);
 
         // Publish Xml
-        await _publisher.PublishXml("exchange1", "key1", body);
+        await _publisher.PublishXml("exchange", "key1", body);
 
         // Publish Batch (byte[], string, Json and/or Xml)
         await _publisher.PublishBatch(new List<PublishBatch> {
-            new PublishBatch("exchange1", "key1", MessageType.String, "Hello, World!"),
-            new PublishBatch("exchange2", "key2", MessageType.Json, body),
+            new PublishBatch("exchange", "key1", MessageType.String, "Hello, World!"),
+            new PublishBatch("exchange", "key2", MessageType.Json, body),
         });
 
         return "Message published!";
@@ -384,7 +379,7 @@ class Program
         context.Register().Wait();
 
         // Publish a message
-        context.Publisher.PublishString("exchange1", "*", "Hello, World").Wait();
+        context.Publisher.PublishString("exchange", "*", "Hello, World").Wait();
 
         // Prevent App From Closing
         Console.ReadLine();

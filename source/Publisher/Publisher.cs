@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using RabbitLight.ConnectionPool;
 using RabbitLight.Helpers;
 using RabbitMQ.Client;
 using System;

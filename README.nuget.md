@@ -47,5 +47,5 @@ public class ExampleController : ControllerBase
 **2.** Publish a message:
 
 ```csharp
-await _publisher.PublishString("exchange1", "key1", "Hello, World!");
+await _publisher.PublishString("my-exchange", "routing-key", "Hello, World!");
 ```

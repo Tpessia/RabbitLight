@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RabbitLight.Config;
+using RabbitLight.ConnectionPool;
 using RabbitLight.Consumer.Manager;
 using RabbitLight.Helpers;
 using RabbitLight.Publisher;

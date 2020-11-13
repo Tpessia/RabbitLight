@@ -9,32 +9,29 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace RabbitLight.Helpers
+namespace RabbitLight.ConnectionPool
 {
-    internal class ConsumerConnectionPool : IConsumerConnectionPool
+    internal class PublisherConnectionPool : IPublisherConnectionPool
     {
         private readonly ContextConfig _config;
         private readonly ILogger _logger;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
+        private readonly IServiceProvider _sp;
 
         // Channel groups
         private readonly Dictionary<IConnection, List<IModel>> _connPool = new Dictionary<IConnection, List<IModel>>(); // connection pool to ensure ratio of channels per connection
-        private readonly Dictionary<IModel, int> _channelUsage = new Dictionary<IModel, int>(); // consumer usage counter, used for death row logic
-        private readonly HashSet<IModel> _deathRow = new HashSet<IModel>(); // channels that were in use during removal attempt
+        private readonly Dictionary<int, IModel> _threadPool = new Dictionary<int, IModel>(); // ensures that each thread has it's own channel
 
-        // Locks (to prevent unsynced management)
+        // Locks
         private readonly SemaphoreSlim _connLock = new SemaphoreSlim(1); // ensures thread-safe lists
-        private readonly SemaphoreSlim _deletionLock = new SemaphoreSlim(1); // ensures a consumer won't use a death row channel
 
-        public int TotalChannels => !_connPool.Any() ? 0
-            : _connPool.Values.Select(x => x.Count).Aggregate((a, b) => a + b) - _deathRow.Count;
-
-        public ConsumerConnectionPool(ContextConfig config, ILogger<ConsumerConnectionPool> logger = null)
+        public PublisherConnectionPool(ContextConfig config, IServiceProvider sp, ILogger<PublisherConnectionPool> logger = null)
         {
             if (config == null)
                 throw new ArgumentException("Invalid null value", nameof(config));
 
             _config = config;
+            _sp = sp;
             _logger = logger;
 
             StartMonitor();
@@ -42,96 +39,28 @@ namespace RabbitLight.Helpers
 
         #region Public
 
-        public async Task<IModel> CreateUnmanagedChannel()
-        {
-            var connFactory = _config.ConnConfig.CreateConnectionFactory();
-            var conn = await connFactory.CreateConnectionAsync();
-            return await conn.CreateModelAsync();
-        }
-
-        public async Task<IModel> CreateNewChannel()
+        public async Task<IModel> GetOrCreateChannel()
         {
             await _connLock.WaitOrThrowAsync(TimeSpan.FromSeconds(30), _cts.Token);
 
+            var threadId = Thread.CurrentThread.ManagedThreadId;
+
             try
             {
-                var channel = await CreateChannel();
-
-                // Prefetch Size -> https://www.rabbitmq.com/amqp-0-9-1-reference.html#:~:text=long%20prefetch-size
-                // Prefetch Count (global: false) -> applied separately to each new consumer on the channel
-                channel.BasicQos(0, _config.ConnConfig.PrefetchCount, false);
-
-                return channel;
+                var hasActiveChannel = _threadPool.ContainsKey(threadId) && _threadPool[threadId].IsOpen;
+                if (hasActiveChannel)
+                    return _threadPool[threadId];
+                else
+                    return await CreateChannel();
             }
             finally
             {
                 _connLock.Release();
-            }
-        }
-
-        public async Task DeleteChannels(int count)
-        {
-            await _connLock.WaitOrThrowAsync(TimeSpan.FromSeconds(30), _cts.Token);
-
-            try
-            {
-                if (!_connPool.Any()) return;
-
-                for (int i = 0; i < count; i++)
-                {
-                    var smallestPool = _connPool.OrderBy(x => x.Value.Count()).FirstOrDefault();
-                    if (!IsNull(smallestPool))
-                    {
-                        if (smallestPool.Value.Count() > 0)
-                        {
-                            var channel = smallestPool.Value[0];
-                            await RemoveChannel(channel, smallestPool.Key);
-                        }
-                    }
-                }
-            }
-            finally
-            {
-                _connLock.Release();
-            }
-        }
-
-        public bool NotifyConsumerStart(IModel channel)
-        {
-            _deletionLock.WaitOrThrow(TimeSpan.FromSeconds(30), _cts.Token);
-
-            try
-            {
-                if (channel == null || !_channelUsage.ContainsKey(channel) || _deathRow.Contains(channel))
-                    return false;
-
-                _channelUsage[channel]++;
-                return true;
-            }
-            finally
-            {
-                _deletionLock.Release();
-            }
-        }
-
-        public void NotifyConsumerEnd(IModel channel)
-        {
-            _deletionLock.Wait(_cts.Token);
-
-            try
-            {
-                _channelUsage[channel]--;
-            }
-            finally
-            {
-                _deletionLock.Release();
             }
         }
 
         public void Dispose()
         {
-            // TODO: wait for _channelUsage == 0?
-
             _cts.Cancel();
 
             foreach (var poolItem in _connPool)
@@ -140,7 +69,6 @@ namespace RabbitLight.Helpers
                 {
                     try
                     {
-                        _deathRow.Add(ch);
                         ch.Close();
                         ch.Dispose();
                     }
@@ -173,17 +101,16 @@ namespace RabbitLight.Helpers
 
         private void StartMonitor()
         {
-            Monitor.Run(async () =>
+            Helpers.Monitor.Run(async () =>
             {
-                _logger?.LogDebug($"\r\n[RabbitLight] *** Start consumer pool monitor ***");
+                _logger?.LogDebug($"\r\n*** [RabbitLight] Start publisher pool monitor ***");
 
                 _logger?.LogDebug($"[RabbitLight] Number of connections: {_connPool.Count}");
-                _logger?.LogDebug($"[RabbitLight] Number of channels: {TotalChannels} ({_connPool.SelectMany(x => x.Value).Count()})");
+                _logger?.LogDebug($"[RabbitLight] Number of channels: {_threadPool.Count}");
 
-                await DisposeDeathRow();
                 await DisposeClosedChannels();
 
-                _logger?.LogDebug($"[RabbitLight] *** Stop consumer pool monitor ***\r\n");
+                _logger?.LogDebug($"*** [RabbitLight] Stop publisher pool monitor ***\r\n");
             },
             _config.ConnConfig.MonitoringInterval, _config.ConnConfig.MonitoringInterval, _cts.Token,
             ex => Task.Run(() => _logger?.LogError(ex, "[RabbitLight] Error while disposing connections/channels")));
@@ -209,25 +136,6 @@ namespace RabbitLight.Helpers
                     if (!conn.IsOpen || isEmpty)
                         await RemoveConnection(conn);
                 }
-            }
-            finally
-            {
-                _connLock.Release();
-            }
-        }
-
-        private async Task DisposeDeathRow()
-        {
-            await _connLock.WaitOrThrowAsync(TimeSpan.FromSeconds(30), _cts.Token);
-
-            try
-            {
-                if (!_deathRow.Any()) return;
-
-                _logger?.LogDebug($"[RabbitLight] Disposing death row channels ({_deathRow.Count})");
-
-                foreach (var channel in _deathRow.ToArray())
-                    await RemoveChannel(channel);
             }
             finally
             {
@@ -267,10 +175,6 @@ namespace RabbitLight.Helpers
         {
             if (conn == null || !_connPool.ContainsKey(conn)) return;
 
-            var connUsage = _connPool[conn].Aggregate(0, (acc, x) => acc + _channelUsage[x]);
-            var canRemove = connUsage == 0;
-            if (!canRemove) return;
-
             _logger?.LogDebug($"[RabbitLight] Removing connection");
 
             foreach (var channel in _connPool[conn].ToArray())
@@ -302,8 +206,18 @@ namespace RabbitLight.Helpers
                     channel = await conn.CreateModelAsync();
                 }
 
+                channel.ConfirmSelect();
+                channel.BasicNacks += (sender, ea) =>
+                {
+                    _config.OnPublisherNack(_sp, sender, ea);
+                };
+
                 _connPool[conn].Add(channel);
-                _channelUsage[channel] = 0;
+
+                // The thread id should only be stored after the last await and before the return,
+                // to ensure that the thread that gets the channel is the correct owner
+                var threadId = Thread.CurrentThread.ManagedThreadId;
+                _threadPool[threadId] = channel;
 
                 return channel;
             }
@@ -319,42 +233,13 @@ namespace RabbitLight.Helpers
             if (channel == null) return;
 
             conn = conn ?? _connPool.FirstOrDefault(x => x.Value.Contains(channel)).Key;
-            if (conn == null)
-            {
-                if (channel.IsOpen) await channel.CloseAsync();
-                _channelUsage.Remove(channel);
-                _deathRow.Remove(channel);
-                channel.Dispose();
-                return;
-            }
 
-            await _deletionLock.WaitOrThrowAsync(TimeSpan.FromSeconds(30), _cts.Token);
+            _logger?.LogDebug($"[RabbitLight] Removing channel ({channel.ChannelNumber})");
 
-            try
-            {
-                var canRemove = _channelUsage[channel] == 0 || !channel.IsOpen;
-                if (!canRemove)
-                {
-                    _logger?.LogDebug($"[RabbitLight] Unable to remove channel ({conn.ToString()} -> {channel.ChannelNumber})");
-
-                    if (!_deathRow.Contains(channel))
-                        _deathRow.Add(channel);
-
-                    return;
-                }
-
-                _logger?.LogDebug($"[RabbitLight] Removing channel ({channel.ChannelNumber})");
-
-                if (channel.IsOpen) await channel.CloseAsync();
-                _connPool[conn].Remove(channel);
-                _channelUsage.Remove(channel);
-                _deathRow.Remove(channel);
-                channel.Dispose();
-            }
-            finally
-            {
-                _deletionLock.Release();
-            }
+            if (channel.IsOpen) await channel.CloseAsync();
+            _threadPool.RemoveAll(x => x.Value == channel);
+            if (conn != null) _connPool[conn].Remove(channel);
+            channel.Dispose();
         }
 
         #endregion

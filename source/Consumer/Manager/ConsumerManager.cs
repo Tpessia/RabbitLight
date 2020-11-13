@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RabbitLight.Config;
+using RabbitLight.ConnectionPool;
 using RabbitLight.Exceptions;
 using RabbitLight.Helpers;
 using RabbitMQ.Client;
@@ -406,14 +407,14 @@ namespace RabbitLight.Consumer.Manager
 
         private void DeclareQueue(IModel channel, ExchangeAttribute exchange, QueueAttribute queue)
         {
-            channel.QueueDeclare(queue: queue.Name, durable: true, exclusive: false, autoDelete: false, arguments: null);
+            channel.QueueDeclare(queue: queue.Name, durable: queue.Durable, exclusive: queue.Exclusive, autoDelete: queue.AutoDelete, arguments: queue.Arguments);
 
             if (!string.IsNullOrWhiteSpace(exchange.Name))
             {
-                channel.ExchangeDeclare(exchange: exchange.Name, type: exchange.ExchangeType, durable: true, autoDelete: false, arguments: null);
+                channel.ExchangeDeclare(exchange: exchange.Name, type: exchange.ExchangeType, durable: exchange.Durable, autoDelete: exchange.AutoDelete, arguments: exchange.Arguments);
 
                 foreach (var routingKey in queue.RoutingKeys)
-                    channel.QueueBind(queue: queue.Name, exchange: exchange.Name, routingKey: routingKey, arguments: null);
+                    channel.QueueBind(queue: queue.Name, exchange: exchange.Name, routingKey: routingKey, arguments: queue.BindingArguments);
             }
         }
 

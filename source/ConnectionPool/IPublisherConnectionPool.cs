@@ -2,7 +2,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace RabbitLight.Helpers
+namespace RabbitLight.ConnectionPool
 {
     internal interface IPublisherConnectionPool : IDisposable
     {
