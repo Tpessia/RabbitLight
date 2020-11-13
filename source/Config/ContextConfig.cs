@@ -1,4 +1,5 @@
 ﻿using RabbitLight.Consumer;
+using RabbitLight.Consumer.Manager;
 using RabbitMQ.Client.Events;
 using System;
 using System.Collections.Generic;
@@ -21,19 +22,19 @@ namespace RabbitLight.Config
         /// <summary>
         /// Callback called before a consumer is invoked
         /// </summary>
-        public Func<IServiceProvider, Type, BasicDeliverEventArgs, Task> OnStart { get; set; }
+        public Func<IServiceProvider, IConsumerMetadata, BasicDeliverEventArgs, Task> OnStart { get; set; }
         /// <summary>
         /// Callback called after a consumer is invoked
         /// </summary>
-        public Func<IServiceProvider, Type, BasicDeliverEventArgs, Task> OnEnd { get; set; }
+        public Func<IServiceProvider, IConsumerMetadata, BasicDeliverEventArgs, Task> OnEnd { get; set; }
         /// <summary>
         /// Callback called after the ACK message is sent
         /// </summary>
-        public Func<IServiceProvider, Type, BasicDeliverEventArgs, Task> OnAck { get; set; }
+        public Func<IServiceProvider, IConsumerMetadata, BasicDeliverEventArgs, Task> OnAck { get; set; }
         /// <summary>
         /// Callback called after a consumer throws an unhandled exception
         /// </summary>
-        public Func<IServiceProvider, Exception, Type, BasicDeliverEventArgs, Task<bool>> OnError { get; set; }
+        public Func<IServiceProvider, IConsumerMetadata, BasicDeliverEventArgs, Exception, Task<bool>> OnError { get; set; }
         /// <summary>
         /// Callback called after a publisher receives a NACK from the server
         /// </summary>

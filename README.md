@@ -99,32 +99,25 @@ public void ConfigureServices(IServiceCollection services)
         config.Consumers = Assembly.GetEntryAssembly().GetTypes();
 
         // Optional callback called before a consumer is invoked
-        config.OnStart = (sp, type, ea) => Task.Run(() =>
-        {
-           var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
-           logger?.LogInformation($"Starting {type.Name}: {ea.DeliveryTag}");
-        });
+        config.OnStart = (sp, consumer, ea) => Task.Run(() =>
+            consumer.Logger.LogInformation($"Starting {consumer.Type.Name}: {ea.DeliveryTag}"));
 
         // Optional callback called after a consumer is successfully invoked
-        config.OnEnd = (sp, type, ea) => Task.Run(() =>
-        {
-            var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
-            logger?.LogInformation($"Ending {type.Name}: {ea.DeliveryTag}");
-        });
+        config.OnEnd = (sp, consumer, ea) => Task.Run(() =>
+            consumer.Logger?.LogInformation($"Ending {consumer.Type.Name}: {ea.DeliveryTag}"));
 
         // Optional callback called after the ACK message is sent
-        config.OnAck = (sp, type, ea) => Task.Run(() =>
-        {
-            var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
-            logger?.LogInformation($"Acked {type.Name}: {ea.DeliveryTag}");
-        });
+        config.OnAck = (sp, consumer, ea) => Task.Run(() =>
+            consumer.Logger?.LogInformation($"Acked {consumer.Type.Name}: {ea.DeliveryTag}"));
 
         // Optional global error handler, whose return identifies the requeue strategy
-        config.OnError = (sp, ex, type, ea) => Task.Run(() =>
+        config.OnError = (sp, consumer, ea, ex) => Task.Run(() =>
         {
-            var logger = sp.GetService<ILoggerFactory>()?.CreateLogger(type);
-            logger?.LogError($"Handled error in {type.Name}: {ea.DeliveryTag}");
-            var requeue = !(ex is SerializationException);
+            consumer.Logger?.LogError($"Handled error in {consumer.Type.Name}: {ea.DeliveryTag}");
+
+            // Requeue if the queue doesn't have a Dead Letter as fallback
+            var requeue = consumer?.Queue?.Arguments != null
+                && !consumer.Queue.Arguments.ContainsKey("x-dead-letter-exchange");
             return requeue;
         });
 

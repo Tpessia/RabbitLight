@@ -181,25 +181,25 @@ namespace RabbitLight.Consumer.Manager
 
                         // Start Callback
                         if (_config.OnStart != null)
-                            await _config.OnStart.Invoke(scope.ServiceProvider, consumer.Type, ea);
+                            await _config.OnStart.Invoke(scope.ServiceProvider, consumer, ea);
 
                         ValidateChannel(channel);
 
                         // Invoke Consumer
-                        await consumer.InvokeConsumer(scope.ServiceProvider, ea);
+                        await consumer.InvokeConsumer(consumer, scope.ServiceProvider, ea);
 
                         ValidateChannel(channel);
 
                         // End Callback
                         if (_config.OnEnd != null)
-                            await _config.OnEnd.Invoke(scope.ServiceProvider, consumer.Type, ea);
+                            await _config.OnEnd.Invoke(scope.ServiceProvider, consumer, ea);
 
                         // Ack
                         Ack(channel, ea.DeliveryTag);
 
                         // Ack Callback
                         if (_config.OnAck != null)
-                            await _config.OnAck.Invoke(scope.ServiceProvider, consumer.Type, ea);
+                            await _config.OnAck.Invoke(scope.ServiceProvider, consumer, ea);
                     }
                     catch (DiscardMessageException ex)
                     {
@@ -216,7 +216,7 @@ namespace RabbitLight.Consumer.Manager
                         try
                         {
                             requeue = _config.OnError == null ? true
-                                : await _config.OnError.Invoke(scope.ServiceProvider, ex, consumer.Type, ea);
+                                : await _config.OnError.Invoke(scope.ServiceProvider, consumer, ea, ex);
                         }
                         catch (Exception callbackEx)
                         {
