@@ -24,7 +24,7 @@ namespace RabbitLight.Consumer
         public QueueAttribute(string name, params string[] routingKeys)
         {
             Name = name;
-            RoutingKeys = routingKeys.Any() ? routingKeys : new[] { "*" };
+            RoutingKeys = routingKeys.Any() ? routingKeys : new[] { "#" };
 
             Durable = true;
             Exclusive = false;

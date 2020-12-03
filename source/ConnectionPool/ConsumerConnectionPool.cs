@@ -14,7 +14,7 @@ namespace RabbitLight.ConnectionPool
     internal class ConsumerConnectionPool : IConsumerConnectionPool
     {
         private readonly ContextConfig _config;
-        private readonly ILogger _logger;
+        private readonly ILogger<ConsumerConnectionPool> _logger;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
 
         // Channel groups
@@ -42,11 +42,19 @@ namespace RabbitLight.ConnectionPool
 
         #region Public
 
-        public async Task<IModel> CreateUnmanagedChannel()
+        public async Task RunChannel(Func<IConnection, IModel, Task> func)
         {
             var connFactory = _config.ConnConfig.CreateConnectionFactory();
             var conn = await connFactory.CreateConnectionAsync();
-            return await conn.CreateModelAsync();
+            var channel = await conn.CreateModelAsync();
+
+            using (conn)
+            {
+                using (channel)
+                {
+                    await func(conn, channel);
+                }
+            }
         }
 
         public async Task<IModel> CreateNewChannel()

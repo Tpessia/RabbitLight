@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using RabbitLight.Api;
 using RabbitLight.Config;
 using RabbitLight.ConnectionPool;
 using RabbitLight.Consumer.Manager;
@@ -14,17 +15,20 @@ namespace RabbitLight.Context
     public abstract class RabbitLightContext : IDisposable
     {
         private readonly ContextConfig _config;
+        private readonly IServiceProvider _sp;
         private readonly IConsumerManager _consumerManager;
-        private bool _registered = false;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
         private readonly ILogger<RabbitLightContext> _logger;
+        private bool _registered = false;
 
         public readonly IPublisher Publisher;
+        public readonly IRabbitApi Api;
 
         public RabbitLightContext(IServiceProvider sp, ContextConfig config)
         {
             _config = config;
             _config.Validate();
+            _sp = sp;
             _logger = CreateLogger<RabbitLightContext>();
 
             var consumerPool =  new ConsumerConnectionPool(_config, CreateLogger<ConsumerConnectionPool>());
@@ -32,6 +36,8 @@ namespace RabbitLight.Context
 
             var publisherPool = new PublisherConnectionPool(_config, sp, CreateLogger<PublisherConnectionPool>());
             Publisher = new Publisher.Publisher(publisherPool);
+
+            Api = new RabbitApi(_config);
 
             ILogger<T> CreateLogger<T>() => sp.GetService<ILoggerFactory>()?.CreateLogger<T>();
         }
@@ -54,6 +60,9 @@ namespace RabbitLight.Context
 
                 await _consumerManager.Register();
                 _registered = true;
+
+                if (_config.OnConfig != null)
+                    await _config.OnConfig(_sp);
             }
         }
 

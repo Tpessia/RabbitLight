@@ -58,9 +58,12 @@ namespace RabbitLight.Publisher
             foreach (var item in content)
             {
                 var basicProperties = channel.CreateBasicProperties();
+
                 basicProperties.DeliveryMode = 2;
                 basicProperties.ContentType = GetContentType(item.MessageType);
-                item.SetBasicProperties(basicProperties);
+
+                if (item.SetBasicProperties != null)
+                    item.SetBasicProperties(basicProperties);
 
                 var body = ParseMessage(item.Body, item.MessageType);
 

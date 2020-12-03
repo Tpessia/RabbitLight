@@ -98,19 +98,28 @@ public void ConfigureServices(IServiceCollection services)
         // Consumer Types to include
         config.Consumers = Assembly.GetEntryAssembly().GetTypes();
 
-        // Optional callback called before a consumer is invoked
+        // Callback called after all necessary configuration has been completed
+        config.OnConfig = async (sp) =>
+        {
+            var context = sp.GetRequiredService<AspNetAppContext>();
+            await context.Api.CreateExchange("manual-exchange");
+            await context.Api.CreateQueue("manual-queue");
+            await context.Api.CreateBind("manual-queue", "manual-exchange", "manual-key");
+        };
+
+        // Callback called before a consumer is invoked
         config.OnStart = (sp, consumer, ea) => Task.Run(() =>
             consumer.Logger.LogInformation($"Starting {consumer.Type.Name}: {ea.DeliveryTag}"));
 
-        // Optional callback called after a consumer is successfully invoked
+        // Callback called after a consumer is successfully invoked
         config.OnEnd = (sp, consumer, ea) => Task.Run(() =>
             consumer.Logger?.LogInformation($"Ending {consumer.Type.Name}: {ea.DeliveryTag}"));
 
-        // Optional callback called after the ACK message is sent
+        // Callback called after the ACK message is sent
         config.OnAck = (sp, consumer, ea) => Task.Run(() =>
             consumer.Logger?.LogInformation($"Acked {consumer.Type.Name}: {ea.DeliveryTag}"));
 
-        // Optional global error handler, whose return identifies the requeue strategy
+        // Global error handler, whose return identifies the requeue strategy
         config.OnError = (sp, consumer, ea, ex) => Task.Run(() =>
         {
             consumer.Logger?.LogError($"Handled error in {consumer.Type.Name}: {ea.DeliveryTag}");
@@ -181,7 +190,7 @@ public class ExampleConsumer : ConsumerBase
 
     [Queue("queue2", "key2")]
     [Queue("queue3", "key3", "key30")]
-    public void ExampleDiscard(MessageContext<ExampleMessage> context)
+    public void ExampleMulti(MessageContext<ExampleMessage> context)
     {
         // Routes:
         // EXCHANGE      ROUTING KEY      QUEUE
@@ -189,11 +198,9 @@ public class ExampleConsumer : ConsumerBase
         // exchange  ->     key3      ->  queue3
         // exchange  ->     key30     ->  queue3
 
-        // You may discard a message with DiscardMessageException
-        // Any other exception will result in requeue
         var msg = context.Message();
-        if (msg == null)
-            throw new DiscardMessageException("Invalid message");
+
+        // Your code here...
     }
 }
 

@@ -1,4 +1,5 @@
 ﻿using RabbitLight.Helpers;
+using RabbitMQ.Client;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,7 +10,7 @@ namespace RabbitLight.Consumer
     public class ExchangeAttribute : Attribute
     {
         public string Name { get; set; }
-        public string ExchangeType { get; set; }
+        public string Type { get; set; }
         public bool Durable { get; set; }
         public bool AutoDelete { get; set; }
         public IDictionary<string, object> Arguments { get; set; }
@@ -22,14 +23,14 @@ namespace RabbitLight.Consumer
         /// <param name="durable"></param>
         /// <param name="autoDelete"></param>
         /// <param name="arguments">e.g. "x-dead-letter-exchange: some.exchange.name; x-max-priority: 10; x-example-boolean: true; x-example-list: [1,2]"</param>
-        public ExchangeAttribute(string name, string type = RabbitMQ.Client.ExchangeType.Topic, bool durable = true, bool autoDelete = false, string arguments = null)
+        public ExchangeAttribute(string name, string type = ExchangeType.Topic, bool durable = true, bool autoDelete = false, string arguments = null)
         {
-            var exchangeTypes = RabbitMQ.Client.ExchangeType.All();
+            var exchangeTypes = ExchangeType.All();
             if (!exchangeTypes.Any(x => x == type))
                 throw new Exception($"Exchange \"{name}\" type should be one of: {string.Join(", ", exchangeTypes)}");
 
             Name = name;
-            ExchangeType = type;
+            Type = type;
 
             Durable = durable;
             AutoDelete = autoDelete;

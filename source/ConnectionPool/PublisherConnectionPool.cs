@@ -14,7 +14,7 @@ namespace RabbitLight.ConnectionPool
     internal class PublisherConnectionPool : IPublisherConnectionPool
     {
         private readonly ContextConfig _config;
-        private readonly ILogger _logger;
+        private readonly ILogger<PublisherConnectionPool> _logger;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
         private readonly IServiceProvider _sp;
 

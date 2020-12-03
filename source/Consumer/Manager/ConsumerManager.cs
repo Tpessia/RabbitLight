@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Logging;
 using RabbitLight.Config;
 using RabbitLight.ConnectionPool;
-using RabbitLight.Exceptions;
 using RabbitLight.Helpers;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -126,11 +125,12 @@ namespace RabbitLight.Consumer.Manager
         {
             if (!_config.ConnConfig.SkipDeclarations)
             {
-                using (var channel = await _connPool.CreateUnmanagedChannel())
+                await _connPool.RunChannel((conn, channel) =>
                 {
                     foreach (var consumer in _consumers)
                         DeclareQueue(channel, consumer.Exchange, consumer.Queue);
-                }
+                    return Task.CompletedTask;
+                });
             }
 
             for (int i = 0; i < channelCount; i++)
@@ -200,13 +200,6 @@ namespace RabbitLight.Consumer.Manager
                         // Ack Callback
                         if (_config.OnAck != null)
                             await _config.OnAck.Invoke(scope.ServiceProvider, consumer, ea);
-                    }
-                    catch (DiscardMessageException ex)
-                    {
-                        // Error: Discard
-
-                        consumer.Logger?.LogWarning(ex, $"[RabbitLight] Message discarded");
-                        Nack(channel, ea.DeliveryTag, requeue: false);
                     }
                     catch (Exception ex)
                     {
@@ -330,7 +323,7 @@ namespace RabbitLight.Consumer.Manager
             var invalidExchanges = new List<string>();
             foreach (var dups in duplicateExchanges)
             {
-                var types = dups.Select(x => x.ExchangeType);
+                var types = dups.Select(x => x.Type);
                 var uniqueTypes = types.Distinct();
                 if (uniqueTypes.Count() > 1)
                     invalidExchanges.Add($"{dups.Key}: {string.Join(", ", uniqueTypes)}");
@@ -411,7 +404,7 @@ namespace RabbitLight.Consumer.Manager
 
             if (!string.IsNullOrWhiteSpace(exchange.Name))
             {
-                channel.ExchangeDeclare(exchange: exchange.Name, type: exchange.ExchangeType, durable: exchange.Durable, autoDelete: exchange.AutoDelete, arguments: exchange.Arguments);
+                channel.ExchangeDeclare(exchange: exchange.Name, type: exchange.Type, durable: exchange.Durable, autoDelete: exchange.AutoDelete, arguments: exchange.Arguments);
 
                 foreach (var routingKey in queue.RoutingKeys)
                     channel.QueueBind(queue: queue.Name, exchange: exchange.Name, routingKey: routingKey, arguments: queue.BindingArguments);

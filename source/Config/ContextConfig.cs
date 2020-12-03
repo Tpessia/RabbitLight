@@ -1,4 +1,5 @@
-﻿using RabbitLight.Consumer;
+﻿using RabbitLight.Api;
+using RabbitLight.Consumer;
 using RabbitLight.Consumer.Manager;
 using RabbitMQ.Client.Events;
 using System;
@@ -19,6 +20,10 @@ namespace RabbitLight.Config
         /// List of consumers that inherit from ConsumerBase
         /// </summary>
         public IEnumerable<Type> Consumers { get; set; }
+        /// <summary>
+        /// Callback called after all necessary configuration has been completed
+        /// </summary>
+        public Func<IServiceProvider, Task> OnConfig { get; set; }
         /// <summary>
         /// Callback called before a consumer is invoked
         /// </summary>
