@@ -54,18 +54,18 @@ namespace RabbitLight.Consumer.Manager
 
         public async Task Register()
         {
-            _logger?.LogInformation($"[RabbitLight] Registering consumers");
+            _logger?.LogInformation($"[{_config.Alias}] Registering consumers");
 
             RegisterConsumers();
 
             try
             {
                 await RegisterListeners(_config.ConnConfig.MinChannels);
-                _logger?.LogInformation($"[RabbitLight] Successfully registered all consumers");
+                _logger?.LogInformation($"[{_config.Alias}] Successfully registered all consumers");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[RabbitLight] Unable to register the consumers");
+                _logger.LogError(ex, $"[{_config.Alias}] Unable to register the consumers");
             }
 
             StartMonitor();
@@ -138,11 +138,18 @@ namespace RabbitLight.Consumer.Manager
                 var overMax = _connPool.TotalChannels >= _config.ConnConfig.MaxChannels;
                 if (overMax) break;
 
-                _logger?.LogDebug($"[RabbitLight] Creating listeners ({i + 1}/{channelCount})");
+                _logger?.LogDebug($"[{_config.Alias}] Creating listeners ({i + 1}/{channelCount})");
 
                 var channel = await _connPool.CreateNewChannel();
                 foreach (var consumer in _consumers)
-                    RegisterListener(consumer, channel);
+                {
+                    consumer.Channels = consumer.Channels.Where(x => x.IsOpen).ToList();
+
+                    var overConsumerMax = consumer.Channels.Count() >= consumer.Queue.MaxChannels;
+                    if (!overConsumerMax) RegisterListener(consumer, channel);
+
+                    consumer.Channels.Add(channel);
+                }
             }
         }
 
@@ -205,21 +212,21 @@ namespace RabbitLight.Consumer.Manager
                     {
                         // Error: Requeue or Discard
 
-                        bool requeue;
+                        var requeueDelay = _config.ConnConfig.RequeueDelay;
+
                         try
                         {
-                            requeue = _config.OnError == null ? true
-                                : await _config.OnError.Invoke(scope.ServiceProvider, consumer, ea, ex);
+                            if (_config.OnError != null)
+                                requeueDelay = await _config.OnError.Invoke(scope.ServiceProvider, consumer, ea, ex);
                         }
                         catch (Exception callbackEx)
                         {
                             ex = callbackEx;
-                            requeue = true;
                         }
 
-                        if (requeue)
+                        if (requeueDelay != null)
                         {
-                            consumer.Logger?.LogError(ex, $"[RabbitLight] Error while consuming, requeueing message");
+                            consumer.Logger?.LogError(ex, $"[{_config.Alias}] Error while consuming, requeueing message");
 
                             if (_config.ConnConfig.RequeueDelay.HasValue)
                             {
@@ -234,7 +241,7 @@ namespace RabbitLight.Consumer.Manager
                         }
                         else
                         {
-                            consumer.Logger?.LogError(ex, "[RabbitLight] Error while consuming, discarding message");
+                            consumer.Logger?.LogError(ex, $"[{_config.Alias}] Error while consuming, discarding message");
                             Nack(channel, ea.DeliveryTag, requeue: false);
                         }
                     }
@@ -263,19 +270,19 @@ namespace RabbitLight.Consumer.Manager
                 if (ch.IsOpen) ch.BasicNack(deliveryTag, multiple, requeue);
             };
 
-            bool ValidateChannel(IModel ch) => ch.IsOpen ? true : throw new Exception("[RabbitLight] Channel is unexpectedly closed");
+            bool ValidateChannel(IModel ch) => ch.IsOpen ? true : throw new Exception($"[{_config.Alias}] Channel is unexpectedly closed");
         }
 
         private void StartMonitor()
         {
             Helpers.Monitor.Run(() => ScaleListeners(),
                 TimeSpan.FromSeconds(10), _config.ConnConfig.MonitoringInterval, _cts.Token,
-                ex => Task.Run(() => _logger?.LogError(ex, "[RabbitLight] Error while scalling")));
+                ex => Task.Run(() => _logger?.LogError(ex, $"[{_config.Alias}] Error while scalling")));
         }
 
         private async Task ScaleListeners()
         {
-            _logger?.LogDebug($"\r\n[RabbitLight] Start scalling");
+            _logger?.LogDebug($"\r\n[{_config.Alias}] Start scalling");
 
             int expected = _config.ConnConfig.MinChannels;
 
@@ -292,27 +299,27 @@ namespace RabbitLight.Consumer.Manager
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "[RabbitLight] Unable to scale the consumers");
+                    _logger.LogError(ex, $"[{_config.Alias}] Unable to scale the consumers");
                 }
             }
 
-            _logger?.LogDebug($"[RabbitLight] Expected channels: {expected}");
+            _logger?.LogDebug($"[{_config.Alias}] Expected channels: {expected}");
 
             expected = expected > _config.ConnConfig.MaxChannels ? _config.ConnConfig.MaxChannels : expected;
             var diff = expected - _connPool.TotalChannels;
 
-            _logger?.LogDebug($"[RabbitLight] Total channels: {_connPool.TotalChannels}");
-            _logger?.LogDebug($"[RabbitLight] Diff channels: {diff}");
+            _logger?.LogDebug($"[{_config.Alias}] Total channels: {_connPool.TotalChannels}");
+            _logger?.LogDebug($"[{_config.Alias}] Diff channels: {diff}");
 
             if (diff != 0)
-                _logger?.LogDebug($"[RabbitLight] Scalling ({_connPool.TotalChannels} -> {expected})");
+                _logger?.LogDebug($"[{_config.Alias}] Scalling ({_connPool.TotalChannels} -> {expected})");
 
             if (diff > 0)
                 await RegisterListeners(diff);
             else if (diff < 0)
                 await _connPool.DeleteChannels(-diff);
 
-            _logger?.LogDebug($"[RabbitLight] End scalling\r\n");
+            _logger?.LogDebug($"[{_config.Alias}] End scalling\r\n");
         }
 
         private void ValidateExchanges(IEnumerable<Type> consumerTypes)

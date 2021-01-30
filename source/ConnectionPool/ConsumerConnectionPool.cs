@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
-using RabbitLight.Config;
+using RabbitLight.Context;
 using RabbitLight.Extensions;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
@@ -13,8 +13,7 @@ namespace RabbitLight.ConnectionPool
 {
     internal class ConsumerConnectionPool : IConsumerConnectionPool
     {
-        private readonly ContextConfig _config;
-        private readonly ILogger<ConsumerConnectionPool> _logger;
+        private readonly RabbitLightContext _context;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
 
         // Channel groups
@@ -29,14 +28,9 @@ namespace RabbitLight.ConnectionPool
         public int TotalChannels => !_connPool.Any() ? 0
             : _connPool.Values.Select(x => x.Count).Aggregate((a, b) => a + b) - _deathRow.Count;
 
-        public ConsumerConnectionPool(ContextConfig config, ILogger<ConsumerConnectionPool> logger = null)
+        public ConsumerConnectionPool(RabbitLightContext context)
         {
-            if (config == null)
-                throw new ArgumentException("Invalid null value", nameof(config));
-
-            _config = config;
-            _logger = logger;
-
+            _context = context;
             StartMonitor();
         }
 
@@ -44,7 +38,7 @@ namespace RabbitLight.ConnectionPool
 
         public async Task RunChannel(Func<IConnection, IModel, Task> func)
         {
-            var connFactory = _config.ConnConfig.CreateConnectionFactory();
+            var connFactory = _context.Config.ConnConfig.CreateConnectionFactory();
             var conn = await connFactory.CreateConnectionAsync();
             var channel = await conn.CreateModelAsync();
 
@@ -67,7 +61,7 @@ namespace RabbitLight.ConnectionPool
 
                 // Prefetch Size -> https://www.rabbitmq.com/amqp-0-9-1-reference.html#:~:text=long%20prefetch-size
                 // Prefetch Count (global: false) -> applied separately to each new consumer on the channel
-                channel.BasicQos(0, _config.ConnConfig.PrefetchCount, false);
+                channel.BasicQos(0, _context.Config.ConnConfig.PrefetchCount, false);
 
                 return channel;
             }
@@ -183,18 +177,18 @@ namespace RabbitLight.ConnectionPool
         {
             Helpers.Monitor.Run(async () =>
             {
-                _logger?.LogDebug($"\r\n[RabbitLight] *** Start consumer pool monitor ***");
+                _context.Logger?.LogDebug($"\r\n[{_context.Config.Alias}] *** Start consumer pool monitor ***");
 
-                _logger?.LogDebug($"[RabbitLight] Number of connections: {_connPool.Count}");
-                _logger?.LogDebug($"[RabbitLight] Number of channels: {TotalChannels} ({_connPool.SelectMany(x => x.Value).Count()})");
+                _context.Logger?.LogDebug($"[{_context.Config.Alias}] Number of connections: {_connPool.Count}");
+                _context.Logger?.LogDebug($"[{_context.Config.Alias}] Number of channels: {TotalChannels} ({_connPool.SelectMany(x => x.Value).Count()})");
 
                 await DisposeDeathRow();
                 await DisposeClosedChannels();
 
-                _logger?.LogDebug($"[RabbitLight] *** Stop consumer pool monitor ***\r\n");
+                _context.Logger?.LogDebug($"[{_context.Config.Alias}] *** Stop consumer pool monitor ***\r\n");
             },
-            _config.ConnConfig.MonitoringInterval, _config.ConnConfig.MonitoringInterval, _cts.Token,
-            ex => Task.Run(() => _logger?.LogError(ex, "[RabbitLight] Error while disposing connections/channels")));
+            _context.Config.ConnConfig.MonitoringInterval, _context.Config.ConnConfig.MonitoringInterval, _cts.Token,
+            ex => Task.Run(() => _context.Logger?.LogError(ex, $"[{_context.Config.Alias}] Error while disposing connections/channels")));
         }
 
         private async Task DisposeClosedChannels()
@@ -232,7 +226,7 @@ namespace RabbitLight.ConnectionPool
             {
                 if (!_deathRow.Any()) return;
 
-                _logger?.LogDebug($"[RabbitLight] Disposing death row channels ({_deathRow.Count})");
+                _context.Logger?.LogDebug($"[{_context.Config.Alias}] Disposing death row channels ({_deathRow.Count})");
 
                 foreach (var channel in _deathRow.ToArray())
                     await RemoveChannel(channel);
@@ -248,7 +242,7 @@ namespace RabbitLight.ConnectionPool
         private async Task<IConnection> GetOrCreateConnection(bool forceCreation = false)
         {
             IConnection conn;
-            var poolItem = _connPool.LastOrDefault(x => x.Value.Count() < _config.ConnConfig.ChannelsPerConnection);
+            var poolItem = _connPool.LastOrDefault(x => x.Value.Count() < _context.Config.ConnConfig.ChannelsPerConnection);
 
             // Prevent returning a closed connection
             if (!IsNull(poolItem) && !poolItem.Key.IsOpen)
@@ -259,7 +253,7 @@ namespace RabbitLight.ConnectionPool
 
             if (IsNull(poolItem) || forceCreation)
             {
-                var connFactory = _config.ConnConfig.CreateConnectionFactory();
+                var connFactory = _context.Config.ConnConfig.CreateConnectionFactory();
                 conn = await connFactory.CreateConnectionAsync();
                 _connPool[conn] = new List<IModel>();
             }
@@ -279,7 +273,7 @@ namespace RabbitLight.ConnectionPool
             var canRemove = connUsage == 0;
             if (!canRemove) return;
 
-            _logger?.LogDebug($"[RabbitLight] Removing connection");
+            _context.Logger?.LogDebug($"[{_context.Config.Alias}] Removing connection");
 
             foreach (var channel in _connPool[conn].ToArray())
                 await RemoveChannel(channel, conn);
@@ -293,7 +287,7 @@ namespace RabbitLight.ConnectionPool
         {
             try
             {
-                _logger?.LogDebug($"[RabbitLight] Creating channel");
+                _context.Logger?.LogDebug($"[{_context.Config.Alias}] Creating channel");
 
                 IConnection conn;
                 IModel channel;
@@ -343,7 +337,7 @@ namespace RabbitLight.ConnectionPool
                 var canRemove = _channelUsage[channel] == 0 || !channel.IsOpen;
                 if (!canRemove)
                 {
-                    _logger?.LogDebug($"[RabbitLight] Unable to remove channel ({conn.ToString()} -> {channel.ChannelNumber})");
+                    _context.Logger?.LogDebug($"[{_context.Config.Alias}] Unable to remove channel ({conn.ToString()} -> {channel.ChannelNumber})");
 
                     if (!_deathRow.Contains(channel))
                         _deathRow.Add(channel);
@@ -351,7 +345,7 @@ namespace RabbitLight.ConnectionPool
                     return;
                 }
 
-                _logger?.LogDebug($"[RabbitLight] Removing channel ({channel.ChannelNumber})");
+                _context.Logger?.LogDebug($"[{_context.Config.Alias}] Removing channel ({channel.ChannelNumber})");
 
                 if (channel.IsOpen) await channel.CloseAsync();
                 _connPool[conn].Remove(channel);

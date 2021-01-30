@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using RabbitMQ.Client;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
 
@@ -14,6 +16,8 @@ namespace RabbitLight.Consumer.Manager
         public ExchangeAttribute Exchange { get; set; }
         public QueueAttribute Queue { get; set; }
         public ILogger Logger { get; set; }
+
+        public List<IModel> Channels { get; set; } = new List<IModel>();
 
         public async Task InvokeConsumer(ConsumerMetadata consumer, IServiceProvider serviceProvider, params object[] contextParams)
         {

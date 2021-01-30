@@ -92,6 +92,9 @@ public void ConfigureServices(IServiceCollection services)
 
     services.AddRabbitLightContext<ExampleContext>(config =>
     {
+        // Use IHostedService vs IHostApplicationLifetime (requires IApplicationBuilder.UseRabbitLight)
+        config.UseHostedService = true;
+
         // Connection Config (from appsettings.json, explained later on this README.md)
         config.ConnConfig = ConnectionConfig.FromConfig(Configuration.GetSection("RabbitLight"));
 
@@ -120,14 +123,16 @@ public void ConfigureServices(IServiceCollection services)
             consumer.Logger?.LogInformation($"Acked {consumer.Type.Name}: {ea.DeliveryTag}"));
 
         // Global error handler, whose return identifies the requeue strategy
+        // null -> Nack w/o requeue; TimeSpan == 0 -> Requeue immediately; TimeSpan > 0 -> Requeue after delay;
         config.OnError = (sp, consumer, ea, ex) => Task.Run(() =>
         {
             consumer.Logger?.LogError($"Handled error in {consumer.Type.Name}: {ea.DeliveryTag}");
 
             // Requeue if the queue doesn't have a Dead Letter as fallback
-            var requeue = consumer?.Queue?.Arguments != null
-                && !consumer.Queue.Arguments.ContainsKey("x-dead-letter-exchange");
-            return requeue;
+            var requeue = !(consumer?.Queue?.Arguments?.ContainsKey("x-dead-letter-exchange")).GetValueOrDefault();
+
+            var requeueDelay = config.ConnConfig.RequeueDelay ?? TimeSpan.FromSeconds(30);
+            return requeue ? requeueDelay : default(TimeSpan?);
         });
 
         // Optional callback called after a publisher receives a NACK from the server
@@ -145,7 +150,8 @@ public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
 {
     // ...
 
-    app.UseRabbitLight();
+    // Only needed if config.UseHostedService == false
+    app.UseRabbitLight<ExampleContext>();
 
     // ...
 }
@@ -169,20 +175,23 @@ public class ExampleConsumer : ConsumerBase
         _logger = logger;
     }
 
-    [Queue("queue1")] // routing key defaults to "*"
+    [Queue("queue1")] // routing key defaults to "#"
     public async Task Example(MessageContext<ExampleMessage> context)
     {
         // Routes:
         // EXCHANGE      ROUTING KEY      QUEUE
-        // exchange  ->       *       ->  queue1
+        // exchange  ->       #       ->  queue1
+
+        // Get headers
+        var headers = context.Headers();
 
         // Get the message
-        // var msg = context.MessageBytes();
-        // var msg = context.MessageString();
-        // var msg = context.MessageXml();
-        // var msg = context.MessageJson();
+        var msgBytes = context.MessageBytes();
+        var msgStr = context.MessageString();
+        var msgXml = context.MessageXml();
+        var msgJson = context.MessageJson();
 
-        // Automatically chooses a parser based on the Content Type Header
+        // Automatically chooses a parser based on the Content  Type Header
         var msg = context.Message();
 
         // Your code here...
@@ -197,6 +206,18 @@ public class ExampleConsumer : ConsumerBase
         // exchange  ->     key2      ->  queue2
         // exchange  ->     key3      ->  queue3
         // exchange  ->     key30     ->  queue3
+
+        var msg = context.Message();
+
+        // Your code here...
+    }
+
+    [Queue("queue4", maxChannels: 1, routingKeys: "key4")]
+    public void ExampleSerially(MessageContext<ExampleMessage> context)
+    {
+        // Routes:
+        // EXCHANGE      ROUTING KEY      QUEUE
+        // exchange  ->     key4      ->  queue4
 
         var msg = context.Message();
 
@@ -327,12 +348,12 @@ public class ExampleController : ControllerBase
 | **Port** | The port to connect on. |
 | **RabbitLight Config:** | ---------------------- |
 | **PortApi** | Port where RabbitMQ management UI plugin is available. |
-| **MinChannels** | Minimum number of parallel channels. |
-| **MaxChannels** | Maximum number of parallel channels. |
+| **MinChannels** | Minimum number of parallel channels for the whole application. |
+| **MaxChannels** | Maximum number of parallel channels for the whole application. |
 | **ScallingThreshold** | Number of messages required to scale a new channel (e.g. 500 messages) or null to disable scalling. |
 | **PrefetchCount** | Number of messages that will be cached by each channel at once. |
 | **ChannelsPerConnection** | Number of channels per connection (RabbitMQ's IConnection). |
-| **RequeueDelay** | Delay for when Nacking a message for requeue or null to instantaneous. |
+| **RequeueDelay** | Delay for when Nacking a message for requeue or null to instantaneous (can be overridden by OnError callback). |
 | **MonitoringInterval** | Interval regarding channel monitoring tasks (health check, auto scalling and self healing) |
 | **SkipVHostConfig** | Skip VHost creation and other configs |
 | **SkipDeclarations** | Skip queue and exchange declaration and bind |

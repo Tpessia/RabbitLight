@@ -3,6 +3,7 @@ using RabbitLight.Exceptions;
 using RabbitLight.Helpers;
 using RabbitMQ.Client.Events;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Xml.Serialization;
@@ -32,6 +33,8 @@ namespace RabbitLight.Consumer
         /// Automatically chooses a parser based on the Content Type Header
         /// </summary>
         public T Message() => EventArgs.Message<T>();
+
+        public Dictionary<string, string> Headers() => EventArgs.Headers();
     }
 
     public static class MessageContextExtensions
@@ -106,6 +109,18 @@ namespace RabbitLight.Consumer
                 return ea.MessageXml<T>();
             else
                 throw new InvalidOperationException($"[RabbitLight] Unable to automatically parse the message, try using a specific parser (MessageContext.{nameof(MessageBytes)}, MessageContext.{nameof(MessageString)}, MessageContext.{nameof(MessageJson)}, MessageContext.{nameof(MessageXml)})");
+        }
+
+        public static Dictionary<string, string> Headers(this BasicDeliverEventArgs ea)
+        {
+            var headers = new Dictionary<string, string>();
+
+            if (ea.BasicProperties.Headers == null) return headers;
+
+            foreach (var header in ea.BasicProperties.Headers)
+                headers.Add(header.Key, Encoding.UTF8.GetString((byte[])header.Value));
+
+            return headers;
         }
     }
 }

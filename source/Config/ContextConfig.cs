@@ -13,6 +13,14 @@ namespace RabbitLight.Config
     public class ContextConfig
     {
         /// <summary>
+        /// Context alias
+        /// </summary>
+        public string Alias { get; set; } = "RabbitLight";
+        /// <summary>
+        /// RabbitMQ + RabbitLight configuration
+        /// </summary>
+        public bool UseHostedService { get; set; } = true;
+        /// <summary>
         /// RabbitMQ + RabbitLight configuration
         /// </summary>
         public ConnectionConfig ConnConfig { get; set; }
@@ -39,7 +47,7 @@ namespace RabbitLight.Config
         /// <summary>
         /// Callback called after a consumer throws an unhandled exception
         /// </summary>
-        public Func<IServiceProvider, IConsumerMetadata, BasicDeliverEventArgs, Exception, Task<bool>> OnError { get; set; }
+        public Func<IServiceProvider, IConsumerMetadata, BasicDeliverEventArgs, Exception, Task<TimeSpan?>> OnError { get; set; }
         /// <summary>
         /// Callback called after a publisher receives a NACK from the server
         /// </summary>

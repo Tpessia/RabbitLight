@@ -62,8 +62,7 @@ namespace RabbitLight.Publisher
                 basicProperties.DeliveryMode = 2;
                 basicProperties.ContentType = GetContentType(item.MessageType);
 
-                if (item.SetBasicProperties != null)
-                    item.SetBasicProperties(basicProperties);
+                item.SetBasicProperties?.Invoke(basicProperties);
 
                 var body = ParseMessage(item.Body, item.MessageType);
 

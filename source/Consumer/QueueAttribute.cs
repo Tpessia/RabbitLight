@@ -16,6 +16,8 @@ namespace RabbitLight.Consumer
         public IDictionary<string, object> Arguments { get; set; }
         public IDictionary<string, object> BindingArguments { get; set; }
 
+        public int? MaxChannels { get; set; }
+
         /// <summary>
         /// Rabbit Queue Declaration
         /// </summary>
@@ -36,14 +38,26 @@ namespace RabbitLight.Consumer
         /// Rabbit Queue Declaration
         /// </summary>
         /// <param name="name"></param>
+        /// <param name="maxChannels"></param>
+        /// <param name="routingKeys"></param>
+        public QueueAttribute(string name, int maxChannels = -1, params string[] routingKeys)
+            : this(name, routingKeys)
+        {
+            MaxChannels = maxChannels > -1 ? maxChannels : default(int?);
+        }
+
+        /// <summary>
+        /// Rabbit Queue Declaration
+        /// </summary>
+        /// <param name="name"></param>
         /// <param name="durable"></param>
         /// <param name="exclusive"></param>
         /// <param name="autoDelete"></param>
         /// <param name="arguments">e.g. "x-dead-letter-exchange: some.exchange.name; x-max-priority: 10; x-example-boolean: true; x-example-list: [1,2]"</param>
         /// <param name="bindingArguments">e.g. "x-match: all, x-example-number: 10, x-example-boolean: true, x-example-list: [1,2]"</param>
         /// <param name="routingKeys"></param>
-        public QueueAttribute(string name, bool durable = true, bool exclusive = false, bool autoDelete = false, string arguments = null, string bindingArguments = null, params string[] routingKeys)
-            : this(name, routingKeys)
+        public QueueAttribute(string name, int maxChannels = -1, bool durable = true, bool exclusive = false, bool autoDelete = false, string arguments = null, string bindingArguments = null, params string[] routingKeys)
+            : this(name, maxChannels, routingKeys)
         {
             Durable = durable;
             Exclusive = exclusive;
