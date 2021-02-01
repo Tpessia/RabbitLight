@@ -92,6 +92,9 @@ public void ConfigureServices(IServiceCollection services)
 
     services.AddRabbitLightContext<ExampleContext>(config =>
     {
+        // Context Alias (used for logging)
+        config.Alias = nameof(ExampleContext);
+
         // Use IHostedService vs IHostApplicationLifetime (requires IApplicationBuilder.UseRabbitLight)
         config.UseHostedService = true;
 
