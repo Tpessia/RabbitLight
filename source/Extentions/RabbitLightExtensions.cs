@@ -30,7 +30,7 @@ namespace RabbitLight.Extensions
             services.AddSingleton<T>(sp => (T)Activator.CreateInstance(typeof(T), sp, config));
 
             if (config.UseHostedService)
-                services.AddHostedService<RabbitLightHost>(sp =>
+                services.AddSingleton<IHostedService>(sp =>
                     new RabbitLightHost((RabbitLightContext)sp.GetService(contextType)));
 
             return services;
