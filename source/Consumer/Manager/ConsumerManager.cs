@@ -228,16 +228,9 @@ namespace RabbitLight.Consumer.Manager
                         {
                             consumer.Logger?.LogError(ex, $"[{_config.Alias}] Error while consuming, requeueing message");
 
-                            if (_config.ConnConfig.RequeueDelay.HasValue)
-                            {
-                                var delay = (int)_config.ConnConfig.RequeueDelay.Value.TotalMilliseconds;
-                                _ = Task.Delay(delay, _cts.Token)
-                                    .ContinueWith(t => Nack(channel, ea.DeliveryTag, requeue: true), _cts.Token);
-                            }
-                            else
-                            {
-                                Nack(channel, ea.DeliveryTag, requeue: true);
-                            }
+                            var delay = (int)requeueDelay.Value.TotalMilliseconds;
+                            _ = Task.Delay(delay, _cts.Token).ContinueWith(t =>
+                                Nack(channel, ea.DeliveryTag, requeue: true), _cts.Token);
                         }
                         else
                         {

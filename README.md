@@ -14,7 +14,7 @@
 
 RabbitLight is a RabbitMQ Client for .NET developed with simplicity in mind.
 
-Messages are routed to their respective consumers using Data Annotations, similar to the `[Route("my-route")]` attribute used on AspNetCore projects.
+Messages are routed to their respective consumers using Attributes, similar to the `[Route("my-route")]` attribute used on AspNetCore projects.
 
 It also comes with Auto Scaling and Self Healing on the client side to ensure that your application is always connected to the broker, while optimizing the usage of the machine's resources with parallel processing.
 
