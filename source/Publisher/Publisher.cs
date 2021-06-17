@@ -66,12 +66,7 @@ namespace RabbitLight.Publisher
 
                 var body = ParseMessage(item.Body, item.MessageType);
 
-#pragma warning disable CS0618
-                RabbitClientNormalizer.NormalizePublisherBatch(
-                    () => batch.Add(item.Exchange, item.RoutingKey, item.Mandatory, basicProperties, (dynamic)body),
-                    () => batch.Add(item.Exchange, item.RoutingKey, item.Mandatory, basicProperties, (dynamic)new ReadOnlyMemory<byte>(body))
-                );
-#pragma warning restore CS0618
+                RabbitClientNormalizer.PublisherBatchAdd(batch, item, basicProperties, body);
             }
 
             batch.Publish();

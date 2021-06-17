@@ -53,12 +53,7 @@ namespace RabbitLight.Consumer
 
         public static byte[] MessageBytes(this BasicDeliverEventArgs ea)
         {
-            byte[] msg = new byte[0];
-            RabbitClientNormalizer.NormalizeEventArgs(
-                () => msg = (dynamic)ea.Body,
-                () => msg = ((dynamic)ea.Body).ToArray()
-            );
-            return msg;
+            return RabbitClientNormalizer.EventArgsGetMessageBytes(ea);
         }
 
         public static string MessageString(this BasicDeliverEventArgs ea)
