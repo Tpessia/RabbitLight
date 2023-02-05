@@ -10,8 +10,6 @@
 
 # RabbitLight
 
-## What
-
 RabbitLight is a RabbitMQ Client for .NET developed with simplicity in mind.
 
 Messages are routed to their respective consumers using Attributes, similar to the `[Route("my-route")]` attribute used on AspNetCore projects.
@@ -62,7 +60,7 @@ public class ExampleController : ControllerBase
 await _publisher.PublishString("my-exchange", "routing-key", "Hello, World!");
 ```
 
-## How
+## How to use
 
 ### **1. Create a Context**
 
@@ -349,6 +347,8 @@ public class ExampleController : ControllerBase
 | **VirtualHost** | Virtual host to access during this connection. |
 | **HostName** | The host to connect to. |
 | **Port** | The port to connect on. |
+| **AmqpProtocol** | The amqp protocol to use (amqp or amqps). |
+| **ApiProtocol** | The api protocol to use (http or https). |
 | **RabbitLight Config:** | ---------------------- |
 | **PortApi** | Port where RabbitMQ management UI plugin is available. |
 | **MinChannels** | Minimum number of parallel channels for the whole application. |

@@ -53,7 +53,7 @@ namespace RabbitLight.Helpers
             // TODO: Dispose handler
             var handler = new HttpClientHandler { Credentials = credentials };
             var client = new HttpClient(handler);
-            client.BaseAddress = new Uri($"http://{connConfig.HostName}:{connConfig.PortApi}/api/");
+            client.BaseAddress = new Uri($"{connConfig.ApiProtocol}://{connConfig.HostName}:{connConfig.PortApi}/api/");
             return client;
         }
     }

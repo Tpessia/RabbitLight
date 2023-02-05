@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace RabbitLight.Context
 {
-    public abstract class RabbitLightContext : IDisposable
+    public abstract class RabbitLightContext : IRabbitLightContext
     {
         private bool _started = false;
         private bool _registered = false;
@@ -24,8 +24,8 @@ namespace RabbitLight.Context
         internal readonly IServiceProvider ServiceProvider;
         internal readonly ILogger<RabbitLightContext> Logger;
 
-        public readonly IPublisher Publisher;
-        public readonly IRabbitApi Api;
+        public IPublisher Publisher { get; private set; }
+        public IRabbitApi Api { get; private set; }
 
         public RabbitLightContext(IServiceProvider sp, ContextConfig config)
         {

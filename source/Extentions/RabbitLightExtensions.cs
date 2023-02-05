@@ -36,6 +36,32 @@ namespace RabbitLight.Extensions
             return services;
         }
 
+        public static IServiceCollection AddRabbitLightContext<TInterface, TImplementation>(this IServiceCollection services, Action<ContextConfig> configBuilder)
+            where TImplementation : RabbitLightContext, TInterface
+            where TInterface : class, IRabbitLightContext
+        {
+            var contextType = typeof(TImplementation);
+            var interfaceType = typeof(TInterface);
+
+            var validContext = typeof(RabbitLightContext).IsAssignableFrom(contextType) && !contextType.IsAbstract && !contextType.IsInterface;
+            if (!validContext) return services;
+
+            var isRegistered = services.Any(x => x.ServiceType == typeof(TInterface));
+            if (isRegistered) return services;
+
+            var config = new ContextConfig();
+            configBuilder(config);
+            config.Alias = config.Alias ?? interfaceType.Name;
+
+            services.AddSingleton<TInterface>(sp => (TInterface)Activator.CreateInstance(typeof(TImplementation), sp, config));
+
+            if (config.UseHostedService)
+                services.AddSingleton<IHostedService>(sp =>
+                    new RabbitLightHost((RabbitLightContext)sp.GetService(interfaceType)));
+
+            return services;
+        }
+
         #endregion
 
         #region Application

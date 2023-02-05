@@ -27,6 +27,14 @@ namespace RabbitLight.Config
         /// </summary>
         public ushort Port { get; set; }
         /// <summary>
+        /// The amqp protocol to use (amqp or amqps)
+        /// </summary>
+        public string AmqpProtocol { get; set; } = "amqp";
+        /// <summary>
+        /// The api protocol to use (http or https)
+        /// </summary>
+        public string ApiProtocol { get; set; } = "http";
+        /// <summary>
         /// Port where RabbitMQ management UI plugin is available
         /// </summary>
         public ushort PortApi { get; set; }
@@ -77,8 +85,9 @@ namespace RabbitLight.Config
         {
         }
 
-        public ConnectionConfig(string userName, string password, string vhost, string hostname, ushort port, ushort portApi, ushort? minChannels = null,
-            ushort? maxChannels = null, ushort? scallingThreshold = null, ushort? prefetchCount = null, ushort? channelsPerConnection = null,
+        public ConnectionConfig(string userName, string password, string vhost, string hostname, ushort port, ushort portApi,
+            string amqpProtocol = null, string apiProtocol = null, ushort? minChannels = null, ushort? maxChannels = null,
+            ushort? scallingThreshold = null, ushort? prefetchCount = null, ushort? channelsPerConnection = null,
             TimeSpan? requeueDelay = null, TimeSpan? monitoringInterval = null, bool? skipVHostConfig = null, bool? skipDeclarations = null)
         {
             UserName = userName;
@@ -86,6 +95,8 @@ namespace RabbitLight.Config
             VirtualHost = vhost;
             HostName = hostname;
             Port = port;
+            AmqpProtocol = amqpProtocol;
+            ApiProtocol = apiProtocol;
 
             PortApi = portApi;
             MinChannels = minChannels ?? MinChannels;
@@ -103,13 +114,14 @@ namespace RabbitLight.Config
 
         public ConnectionFactory CreateConnectionFactory()
         {
+            var uri = new Uri($"{AmqpProtocol}://{HostName}:{Port}");
+
             return new ConnectionFactory()
             {
                 UserName = UserName,
                 Password = Password,
                 VirtualHost = VirtualHost,
-                HostName = HostName,
-                Port = Port,
+                Uri = uri,
                 RequestedChannelMax = ChannelsPerConnection,
                 DispatchConsumersAsync = true,
                 // https://www.rabbitmq.com/dotnet-api-guide.html#recovery
